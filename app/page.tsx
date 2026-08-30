@@ -106,7 +106,7 @@ export default function Home() {
             {error && <p role="alert" className="rounded-xl border-2 border-[#a31d1d] bg-[#ffe2df] px-4 py-3 text-sm font-bold text-[#8a1717]">{error}</p>}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm font-semibold text-muted-foreground">Eine Option pro Zeile · mindestens 2</p>
-              <Button disabled={submitting} className="h-12 rounded-xl border-2 border-foreground px-5 text-base font-black shadow-[3px_3px_0_var(--ink)]">{submitting ? 'Wird erstellt…' : 'Erstellen'} <ArrowRight className="size-5" /></Button>
+              <Button type="submit" disabled={submitting} className="h-12 rounded-xl border-2 border-foreground px-5 text-base font-black shadow-[3px_3px_0_var(--ink)]">{submitting ? 'Wird erstellt…' : 'Erstellen'} <ArrowRight className="size-5" /></Button>
             </div>
           </form>
         </div>
