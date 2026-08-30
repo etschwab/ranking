@@ -1,0 +1,55 @@
+import { env } from 'cloudflare:workers';
+
+export type RankingItem = { id: string; label: string; position: number; average: number | null; votes: number; distribution: Record<string, number> };
+export type RankingData = { id: string; slug: string; title: string; description: string; createdAt: number; ballotCount: number; items: RankingItem[] };
+
+let schemaReady = false;
+
+export async function ensureSchema() {
+  if (schemaReady) return;
+  const db = env.DB;
+  await db.batch([
+    db.prepare('CREATE TABLE IF NOT EXISTS rankings (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT \'\', created_at INTEGER NOT NULL)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, label TEXT NOT NULL, position INTEGER NOT NULL)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS ballots (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, voter_name TEXT NOT NULL DEFAULT \'\', created_at INTEGER NOT NULL)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS scores (ballot_id TEXT NOT NULL REFERENCES ballots(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, tier INTEGER NOT NULL CHECK(tier BETWEEN 1 AND 5), PRIMARY KEY (ballot_id, item_id))'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_items_ranking_position ON items(ranking_id, position)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_ballots_ranking_created ON ballots(ranking_id, created_at)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_scores_item ON scores(item_id)'),
+  ]);
+  schemaReady = true;
+}
+
+export async function getRanking(slug: string): Promise<RankingData | null> {
+  await ensureSchema();
+  const db = env.DB;
+  const ranking = await db.prepare('SELECT id, slug, title, description, created_at AS createdAt FROM rankings WHERE slug = ?').bind(slug).first<{ id: string; slug: string; title: string; description: string; createdAt: number }>();
+  if (!ranking) return null;
+  const [itemRows, ballotRow, scoreRows] = await Promise.all([
+    db.prepare('SELECT id, label, position FROM items WHERE ranking_id = ? ORDER BY position').bind(ranking.id).all<{ id: string; label: string; position: number }>(),
+    db.prepare('SELECT COUNT(*) AS count FROM ballots WHERE ranking_id = ?').bind(ranking.id).first<{ count: number }>(),
+    db.prepare('SELECT s.item_id AS itemId, s.tier AS tier, COUNT(*) AS count FROM scores s JOIN items i ON i.id = s.item_id WHERE i.ranking_id = ? GROUP BY s.item_id, s.tier').bind(ranking.id).all<{ itemId: string; tier: number; count: number }>(),
+  ]);
+  const grouped = new Map<string, { total: number; sum: number; distribution: Record<string, number> }>();
+  for (const row of scoreRows.results) {
+    const current = grouped.get(row.itemId) ?? { total: 0, sum: 0, distribution: {} };
+    current.total += Number(row.count);
+    current.sum += Number(row.count) * Number(row.tier);
+    current.distribution[String(row.tier)] = Number(row.count);
+    grouped.set(row.itemId, current);
+  }
+  return {
+    ...ranking,
+    ballotCount: Number(ballotRow?.count ?? 0),
+    items: itemRows.results.map((item) => {
+      const result = grouped.get(item.id);
+      return { ...item, votes: result?.total ?? 0, average: result ? result.sum / result.total : null, distribution: result?.distribution ?? {} };
+    }),
+  };
+}
+
+export function createSlug() {
+  const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
+}
