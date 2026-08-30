@@ -15,6 +15,13 @@
       "when": 1788108334518,
       "tag": "0001_wonderful_hellfire_club",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788112037732,
+      "tag": "0002_fresh_grandmaster",
+      "breakpoints": true
     }
   ]
 }

@@ -1,8 +1,11 @@
 import { env } from 'cloudflare:workers';
 import { createSlug, ensureSchema } from '@/db/rankings';
+import { chatGPTSignInPath, getChatGPTUser } from '@/app/chatgpt-auth';
 
 export async function POST(request: Request) {
   try {
+    const user = await getChatGPTUser();
+    if (!user) return Response.json({ error: 'Bitte melde dich zuerst an.', signInPath: chatGPTSignInPath('/') }, { status: 401 });
     const body = await request.json() as { title?: unknown; description?: unknown; items?: unknown };
     const title = typeof body.title === 'string' ? body.title.trim().slice(0, 100) : '';
     const description = typeof body.description === 'string' ? body.description.trim().slice(0, 280) : '';
@@ -15,6 +18,7 @@ export async function POST(request: Request) {
     const slug = createSlug();
     await db.batch([
       db.prepare('INSERT INTO rankings (id, slug, title, description, created_at) VALUES (?, ?, ?, ?, ?)').bind(rankingId, slug, title, description, Date.now()),
+      db.prepare('INSERT INTO ranking_owners (ranking_id, user_id, email) VALUES (?, ?, ?)').bind(rankingId, user.userId, user.email),
       ...labels.map((label, index) => db.prepare('INSERT INTO items (id, ranking_id, label, position) VALUES (?, ?, ?, ?)').bind(crypto.randomUUID(), rankingId, label.slice(0, 80), index)),
     ]);
     return Response.json({ slug }, { status: 201 });

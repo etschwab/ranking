@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { ArrowRight, BarChart3, Check, Plus, Share2, Sparkles, Trophy } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowRight, BarChart3, Check, LogIn, Plus, Share2, Sparkles, Trophy, UserRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,6 +19,11 @@ export default function Home() {
   const [options, setOptions] = useState('Japan\nIsland\nPortugal\nKanada\nGriechenland');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [account, setAccount] = useState<{ user: { displayName: string; email: string } | null; signInPath: string; signOutPath: string } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/me').then((response) => response.json()).then(setAccount).catch(() => setAccount(null));
+  }, []);
 
   async function createRanking(event: React.FormEvent) {
     event.preventDefault();
@@ -30,7 +35,11 @@ export default function Home() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ title, description, items: options.split('\n') }),
       });
-      const data = await response.json() as { slug?: string; error?: string };
+      const data = await response.json() as { slug?: string; error?: string; signInPath?: string };
+      if (response.status === 401 && data.signInPath) {
+        window.location.href = data.signInPath;
+        return;
+      }
       if (!response.ok || !data.slug) throw new Error(data.error ?? 'Unbekannter Fehler');
       window.location.href = `/r/${data.slug}`;
     } catch (reason) {
@@ -48,7 +57,12 @@ export default function Home() {
           </span>
           <span className="text-xl">RANKLY</span>
         </a>
-        <a href="#erstellen" className="text-sm font-bold text-muted-foreground transition hover:text-foreground">Ranking erstellen</a>
+        <nav className="flex items-center gap-2">
+          {account?.user ? <>
+            <a href="/mine" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-black hover:bg-muted"><UserRound className="size-4" /> <span className="hidden sm:inline">Meine Rankings</span></a>
+            <a href={account.signOutPath} target="_top" className="text-sm font-bold text-muted-foreground hover:text-foreground">Abmelden</a>
+          </> : account ? <a href={account.signInPath} target="_top" className="flex items-center gap-2 rounded-xl border-2 border-foreground bg-card px-3 py-2 text-sm font-black shadow-[2px_2px_0_var(--ink)]"><LogIn className="size-4" /> Anmelden</a> : <a href="#erstellen" className="text-sm font-bold text-muted-foreground">Ranking erstellen</a>}
+        </nav>
       </header>
 
       <section className="mx-auto grid max-w-7xl gap-12 px-5 pb-20 pt-9 lg:grid-cols-[0.84fr_1.16fr] lg:items-center lg:px-8 lg:pb-28 lg:pt-16">
@@ -106,7 +120,7 @@ export default function Home() {
             {error && <p role="alert" className="rounded-xl border-2 border-[#a31d1d] bg-[#ffe2df] px-4 py-3 text-sm font-bold text-[#8a1717]">{error}</p>}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm font-semibold text-muted-foreground">Eine Option pro Zeile · mindestens 2</p>
-              <Button type="submit" disabled={submitting} className="h-12 rounded-xl border-2 border-foreground px-5 text-base font-black shadow-[3px_3px_0_var(--ink)]">{submitting ? 'Wird erstellt…' : 'Erstellen'} <ArrowRight className="size-5" /></Button>
+              <Button type="submit" disabled={submitting} className="h-12 rounded-xl border-2 border-foreground px-5 text-base font-black shadow-[3px_3px_0_var(--ink)]">{submitting ? 'Wird erstellt…' : account && !account.user ? 'Anmelden & erstellen' : 'Erstellen'} <ArrowRight className="size-5" /></Button>
             </div>
           </form>
         </div>

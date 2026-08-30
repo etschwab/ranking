@@ -13,11 +13,27 @@ export async function ensureSchema() {
     db.prepare('CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, label TEXT NOT NULL, position INTEGER NOT NULL)'),
     db.prepare('CREATE TABLE IF NOT EXISTS ballots (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, voter_name TEXT NOT NULL DEFAULT \'\', created_at INTEGER NOT NULL)'),
     db.prepare('CREATE TABLE IF NOT EXISTS scores (ballot_id TEXT NOT NULL REFERENCES ballots(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, tier INTEGER NOT NULL CHECK(tier BETWEEN 1 AND 5), PRIMARY KEY (ballot_id, item_id))'),
+    db.prepare('CREATE TABLE IF NOT EXISTS ranking_owners (ranking_id TEXT PRIMARY KEY REFERENCES rankings(id) ON DELETE CASCADE, user_id TEXT NOT NULL, email TEXT NOT NULL)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_items_ranking_position ON items(ranking_id, position)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_ballots_ranking_created ON ballots(ranking_id, created_at)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_scores_item ON scores(item_id)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_ranking_owners_user ON ranking_owners(user_id)'),
   ]);
   schemaReady = true;
+}
+
+export async function getRankingsForOwner(userId: string) {
+  await ensureSchema();
+  const rows = await env.DB.prepare(`
+    SELECT r.slug, r.title, r.description, r.created_at AS createdAt, COUNT(b.id) AS ballotCount
+    FROM rankings r
+    JOIN ranking_owners o ON o.ranking_id = r.id
+    LEFT JOIN ballots b ON b.ranking_id = r.id
+    WHERE o.user_id = ?
+    GROUP BY r.id
+    ORDER BY r.created_at DESC
+  `).bind(userId).all<{ slug: string; title: string; description: string; createdAt: number; ballotCount: number }>();
+  return rows.results.map((row) => ({ ...row, ballotCount: Number(row.ballotCount) }));
 }
 
 export async function getRanking(slug: string): Promise<RankingData | null> {
