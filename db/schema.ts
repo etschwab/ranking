@@ -28,6 +28,11 @@ export const ballots = sqliteTable('ballots', {
   createdAt: integer('created_at').notNull(),
 }, (table) => [index('idx_ballots_ranking_created').on(table.rankingId, table.createdAt)]);
 
+export const ballotEditTokens = sqliteTable('ballot_edit_tokens', {
+  ballotId: text('ballot_id').primaryKey().references(() => ballots.id, { onDelete: 'cascade' }),
+  token: text('token').notNull().unique(),
+});
+
 export const scores = sqliteTable('scores', {
   ballotId: text('ballot_id').notNull().references(() => ballots.id, { onDelete: 'cascade' }),
   itemId: text('item_id').notNull().references(() => items.id, { onDelete: 'cascade' }),
