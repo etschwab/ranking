@@ -5,6 +5,7 @@ import { BarChart3, CheckCircle2, Clock3, Copy, Crown, Download, LockKeyhole, Me
 import { BrandHeader } from '@/components/brand-header';
 import { Button } from '@/components/ui/button';
 import { RankingAccessGate } from '@/components/ranking-access-gate';
+import { RankingSocial } from '@/components/ranking-social';
 import type { RankingAccessMode, RankingData, RankingItem } from '@/db/rankings';
 
 const tiers = [
@@ -106,6 +107,7 @@ export function RankingResults({ slug }: { slug: string }) {
             <section className="mt-8 flex flex-col items-start justify-between gap-5 rounded-[1.5rem] border-2 border-foreground bg-[#d9cffd] p-6 sm:flex-row sm:items-center"><div><h2 className="text-2xl font-black">Noch mehr Meinungen sammeln?</h2><p className="mt-1 font-semibold text-muted-foreground">Teile die Abstimmung und aktualisiere später die Auswertung.</p></div><Button onClick={copyVoteLink} className="h-12 border-2 border-foreground px-5 font-black shadow-[3px_3px_0_var(--ink)]">{copied ? <CheckCircle2 /> : <Copy />} {copied ? 'Kopiert' : 'Abstimmungslink kopieren'}</Button></section>
           </>
         )}
+        <RankingSocial slug={slug} items={ranking.items} />
       </section>
     </main>
   );

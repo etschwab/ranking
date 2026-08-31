@@ -33,7 +33,10 @@ export default function Home() {
   const parsedOptions = useMemo(() => [...new Set(options.split('\n').map((option) => option.trim()).filter(Boolean))], [options]);
 
   useEffect(() => {
-    fetch('/api/me').then((response) => response.json()).then(setAccount).catch(() => setAccount(null));
+    fetch('/api/me').then(async (response) => {
+      const data = await response.json() as { user: { displayName: string; email: string } | null; signInPath: string; signOutPath: string };
+      setAccount(data);
+    }).catch(() => setAccount(null));
     try {
       const storedDraft = localStorage.getItem('rankly-creator-draft');
       if (storedDraft) {

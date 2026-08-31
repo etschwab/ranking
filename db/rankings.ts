@@ -18,10 +18,15 @@ export async function ensureSchema() {
     db.prepare('CREATE TABLE IF NOT EXISTS scores (ballot_id TEXT NOT NULL REFERENCES ballots(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, tier INTEGER NOT NULL CHECK(tier BETWEEN 1 AND 5), PRIMARY KEY (ballot_id, item_id))'),
     db.prepare('CREATE TABLE IF NOT EXISTS ranking_owners (ranking_id TEXT PRIMARY KEY REFERENCES rankings(id) ON DELETE CASCADE, user_id TEXT NOT NULL, email TEXT NOT NULL)'),
     db.prepare('CREATE TABLE IF NOT EXISTS user_profiles (user_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, email TEXT NOT NULL, updated_at BIGINT NOT NULL)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS comments (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, user_id TEXT NOT NULL, author_name TEXT NOT NULL, body TEXT NOT NULL, created_at BIGINT NOT NULL)'),
+    db.prepare("CREATE TABLE IF NOT EXISTS reactions (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, target_type TEXT NOT NULL CHECK(target_type IN ('item', 'comment')), target_id TEXT NOT NULL, user_id TEXT NOT NULL, emoji TEXT NOT NULL, created_at BIGINT NOT NULL)"),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_items_ranking_position ON items(ranking_id, position)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_ballots_ranking_created ON ballots(ranking_id, created_at)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_scores_item ON scores(item_id)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_ranking_owners_user ON ranking_owners(user_id)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_comments_ranking_created ON comments(ranking_id, created_at)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_reactions_target ON reactions(ranking_id, target_type, target_id)'),
+    db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_reactions_unique ON reactions(ranking_id, target_type, target_id, user_id, emoji)'),
   ]);
   await db.batch([
     db.prepare('ALTER TABLE rankings ADD COLUMN IF NOT EXISTS closes_at BIGINT'),
@@ -33,6 +38,8 @@ export async function ensureSchema() {
     db.prepare('ALTER TABLE rankings ALTER COLUMN closes_at TYPE BIGINT'),
     db.prepare('ALTER TABLE ballots ALTER COLUMN created_at TYPE BIGINT'),
     db.prepare('ALTER TABLE user_profiles ALTER COLUMN updated_at TYPE BIGINT'),
+    db.prepare('ALTER TABLE comments ALTER COLUMN created_at TYPE BIGINT'),
+    db.prepare('ALTER TABLE reactions ALTER COLUMN created_at TYPE BIGINT'),
   ]);
   schemaReady = true;
 }

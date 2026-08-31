@@ -21,6 +21,7 @@ import { ArrowDownToLine, BarChart3, CheckCircle2, Clock3, Cloud, Copy, GripVert
 import { Button } from '@/components/ui/button';
 import { BrandHeader } from '@/components/brand-header';
 import { RankingAccessGate } from '@/components/ranking-access-gate';
+import { RankingSocial } from '@/components/ranking-social';
 import type { RankingAccessMode, RankingData, RankingItem } from '@/db/rankings';
 
 const tiers = [
@@ -328,6 +329,7 @@ export function RankingVote({ slug }: { slug: string }) {
           <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl border-2 border-foreground bg-[#d9cffd]"><UserRound className="size-5" /></span><div><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Du stimmst ab als</p><p className="font-black">{account?.user?.displayName ?? 'Angemeldete Person'}</p></div></div>
           <Button disabled={!complete || submitting} onClick={submitVote} className="h-12 border-2 border-foreground px-6 text-base font-black shadow-[3px_3px_0_var(--ink)]">{submitting ? 'Wird gespeichert…' : complete ? hasSavedVote ? 'Änderungen speichern' : 'Abstimmung senden' : `Noch ${ranking.items.length - assigned} einordnen`} <Send /></Button>
         </section>
+        <RankingSocial slug={slug} items={ranking.items} />
         {error && <p role="alert" className="mt-5 rounded-xl border-2 border-[#a31d1d] bg-[#ffe2df] px-4 py-3 font-bold text-[#8a1717]">{error}</p>}
         <div className="mt-5 flex flex-wrap gap-4">{scoreHistory.length > 0 && <button onClick={undo} className="flex items-center gap-2 text-sm font-black text-primary hover:underline"><Undo2 className="size-4" /> Letzte Änderung rückgängig</button>}{assigned > 0 && <button onClick={resetScores} className="flex items-center gap-2 text-sm font-black text-muted-foreground hover:text-foreground"><RotateCcw className="size-4" /> Alles zurücksetzen</button>}</div>
       </section>
