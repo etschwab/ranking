@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertOctagon, AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, BarChart3, Clock3, Plus, Save, Trash2, X } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, BarChart3, Clock3, Globe2, KeyRound, Mail, Plus, Save, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import type { RankingData } from '@/db/rankings';
+import type { OwnedRankingData, RankingAccessMode } from '@/db/rankings';
 
 type EditItem = { key: string; id?: string; label: string };
 
@@ -16,10 +16,12 @@ function toDateTimeLocal(timestamp: number | null) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-export function RankingEditForm({ ranking }: { ranking: RankingData }) {
+export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
   const [title, setTitle] = useState(ranking.title);
   const [description, setDescription] = useState(ranking.description);
   const [closesAt, setClosesAt] = useState(toDateTimeLocal(ranking.closesAt));
+  const [accessMode, setAccessMode] = useState<RankingAccessMode>(ranking.accessMode);
+  const [password, setPassword] = useState('');
   const [items, setItems] = useState<EditItem[]>(ranking.items.map((item) => ({ key: item.id, id: item.id, label: item.label })));
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -54,7 +56,7 @@ export function RankingEditForm({ ranking }: { ranking: RankingData }) {
       const response = await fetch(`/api/rankings/${ranking.slug}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title, description, closesAt: closesAt ? new Date(closesAt).getTime() : null, items: items.map(({ id, label }) => ({ id, label })) }),
+        body: JSON.stringify({ title, description, closesAt: closesAt ? new Date(closesAt).getTime() : null, accessMode, password, items: items.map(({ id, label }) => ({ id, label })) }),
       });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error ?? 'Speichern fehlgeschlagen.');
@@ -93,6 +95,11 @@ export function RankingEditForm({ ranking }: { ranking: RankingData }) {
         <label className="grid gap-2 text-sm font-black" htmlFor="edit-title">Titel<Input id="edit-title" required minLength={3} maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} className="h-12 border-2 border-foreground px-4 text-base font-bold" /></label>
         <label className="grid gap-2 text-sm font-black" htmlFor="edit-description">Beschreibung <span className="font-semibold text-muted-foreground">(optional)</span><Textarea id="edit-description" maxLength={280} value={description} onChange={(event) => setDescription(event.target.value)} className="min-h-24 border-2 border-foreground px-4 py-3 text-base" /></label>
         <label className="grid gap-2 text-sm font-black" htmlFor="edit-deadline">Abstimmungsfrist <span className="font-semibold text-muted-foreground">(optional)</span><span className="relative"><Clock3 className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" /><Input id="edit-deadline" type="datetime-local" value={closesAt} onChange={(event) => setClosesAt(event.target.value)} className="h-12 border-2 border-foreground pl-12 font-bold" /></span><span className="font-semibold text-muted-foreground">Leeren, um die Abstimmung wieder ohne Frist zu öffnen.</span></label>
+        <fieldset className="grid gap-3"><legend className="text-sm font-black">Zugriff</legend><div className="grid gap-2 sm:grid-cols-3">{([
+          { mode: 'public', icon: Globe2, title: 'Öffentlich', text: 'Jeder mit Link' },
+          { mode: 'password', icon: KeyRound, title: 'Passwort', text: 'Geschützt' },
+          { mode: 'invite', icon: Mail, title: 'Einladung', text: 'Geheimer Link' },
+        ] as const).map((choice) => <button key={choice.mode} type="button" onClick={() => setAccessMode(choice.mode)} aria-pressed={accessMode === choice.mode} className={`rounded-xl border-2 p-3 text-left ${accessMode === choice.mode ? 'border-foreground bg-[#d9cffd] shadow-[3px_3px_0_var(--ink)]' : 'border-foreground/25 bg-background hover:border-foreground'}`}><choice.icon className="size-5" /><span className="mt-2 block font-black">{choice.title}</span><span className="text-xs font-semibold text-muted-foreground">{choice.text}</span></button>)}</div>{accessMode === 'password' && <label className="grid gap-2 text-sm font-black" htmlFor="edit-password">{ranking.accessMode === 'password' && ranking.hasPassword ? 'Neues Passwort (optional)' : 'Passwort'}<Input id="edit-password" type="password" required={ranking.accessMode !== 'password' || !ranking.hasPassword} minLength={6} maxLength={100} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="h-12 border-2 border-foreground px-4 font-bold" placeholder={ranking.accessMode === 'password' && ranking.hasPassword ? 'Leer lassen, um es beizubehalten' : 'Mindestens 6 Zeichen'} /><span className="font-semibold text-muted-foreground">Bei einer Änderung verlieren alte Freigaben automatisch ihre Gültigkeit.</span></label>}</fieldset>
       </section>
 
       <section className="rounded-[1.5rem] border-[3px] border-foreground bg-card p-5 shadow-[7px_7px_0_var(--ink)] sm:p-7">

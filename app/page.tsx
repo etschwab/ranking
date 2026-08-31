@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BarChart3, Check, Clapperboard, Clock3, Link2, ListChecks, LogIn, MapPinned, Plus, Save, Share2, Sparkles, Trophy, Utensils, UserRound, WandSparkles } from 'lucide-react';
+import { ArrowRight, BarChart3, Check, Clapperboard, Clock3, Globe2, KeyRound, Link2, ListChecks, LockKeyhole, LogIn, Mail, MapPinned, Plus, Save, Share2, Sparkles, Trophy, Utensils, UserRound, WandSparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,6 +24,8 @@ export default function Home() {
   const [description, setDescription] = useState('');
   const [options, setOptions] = useState('Japan\nIsland\nPortugal\nKanada\nGriechenland');
   const [closesAt, setClosesAt] = useState('');
+  const [accessMode, setAccessMode] = useState<'public' | 'password' | 'invite'>('public');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [draftReady, setDraftReady] = useState(false);
@@ -35,12 +37,13 @@ export default function Home() {
     try {
       const storedDraft = localStorage.getItem('rankly-creator-draft');
       if (storedDraft) {
-        const draft = JSON.parse(storedDraft) as { title?: string; description?: string; options?: string; closesAt?: string };
+        const draft = JSON.parse(storedDraft) as { title?: string; description?: string; options?: string; closesAt?: string; accessMode?: 'public' | 'password' | 'invite' };
         if (draft.title || draft.description || draft.options || draft.closesAt) {
           setTitle(draft.title ?? '');
           setDescription(draft.description ?? '');
           setOptions(draft.options ?? '');
           setClosesAt(draft.closesAt ?? '');
+          setAccessMode(draft.accessMode ?? 'public');
         }
       }
     } catch { /* Ignore invalid local drafts. */ }
@@ -49,8 +52,8 @@ export default function Home() {
 
   useEffect(() => {
     if (!draftReady) return;
-    localStorage.setItem('rankly-creator-draft', JSON.stringify({ title, description, options, closesAt }));
-  }, [closesAt, description, draftReady, options, title]);
+    localStorage.setItem('rankly-creator-draft', JSON.stringify({ title, description, options, closesAt, accessMode }));
+  }, [accessMode, closesAt, description, draftReady, options, title]);
 
   function applyPreset(preset: (typeof creatorPresets)[number]) {
     setTitle(preset.title);
@@ -67,7 +70,7 @@ export default function Home() {
       const response = await fetch('/api/rankings', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title, description, closesAt: closesAt ? new Date(closesAt).getTime() : null, items: options.split('\n') }),
+        body: JSON.stringify({ title, description, closesAt: closesAt ? new Date(closesAt).getTime() : null, accessMode, password, items: options.split('\n') }),
       });
       const data = await response.json() as { slug?: string; error?: string; signInPath?: string };
       if (response.status === 401 && data.signInPath) {
@@ -158,7 +161,12 @@ export default function Home() {
             <label className="grid gap-2 text-sm font-black" htmlFor="ranking-title"><span className="flex items-center gap-2"><span className="grid size-6 place-items-center rounded-full bg-foreground text-xs text-background">1</span>Titel</span><Input id="ranking-title" required maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} className="h-12 rounded-xl border-2 border-foreground px-4 text-base font-bold" placeholder="z. B. Unser nächstes Reiseziel" /></label>
             <label className="grid gap-2 text-sm font-black" htmlFor="ranking-description"><span className="flex items-center gap-2"><span className="grid size-6 place-items-center rounded-full bg-foreground text-xs text-background">2</span>Beschreibung <span className="font-semibold text-muted-foreground">(optional)</span></span><Input id="ranking-description" maxLength={280} value={description} onChange={(event) => setDescription(event.target.value)} className="h-12 rounded-xl border-2 border-foreground px-4 text-base" placeholder="Worum geht es?" /></label>
             <label className="grid gap-2 text-sm font-black" htmlFor="ranking-deadline"><span className="flex items-center gap-2"><span className="grid size-6 place-items-center rounded-full bg-foreground text-xs text-background">3</span>Abstimmungsfrist <span className="font-semibold text-muted-foreground">(optional)</span></span><span className="relative"><Clock3 className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" /><Input id="ranking-deadline" type="datetime-local" value={closesAt} onChange={(event) => setClosesAt(event.target.value)} className="h-12 rounded-xl border-2 border-foreground pl-12 text-base font-bold" /></span><span className="font-semibold text-muted-foreground">Ohne Frist bleibt die Abstimmung dauerhaft offen.</span></label>
-            <label className="grid gap-2 text-sm font-black" htmlFor="ranking-options"><span className="flex items-center justify-between gap-2"><span className="flex items-center gap-2"><span className="grid size-6 place-items-center rounded-full bg-foreground text-xs text-background">4</span>Optionen</span><span className={`rounded-full px-2.5 py-1 text-xs ${parsedOptions.length >= 2 ? 'bg-[#d9f7e4] text-[#125a2f]' : 'bg-muted text-muted-foreground'}`}>{parsedOptions.length}/30</span></span><Textarea id="ranking-options" required className="min-h-40 rounded-xl border-2 border-foreground px-4 py-3 text-base leading-relaxed" value={options} onChange={(event) => setOptions(event.target.value)} /></label>
+            <fieldset className="grid gap-3"><legend className="flex items-center gap-2 text-sm font-black"><span className="grid size-6 place-items-center rounded-full bg-foreground text-xs text-background">4</span>Zugriff</legend><div className="grid gap-2 sm:grid-cols-3">{([
+              { mode: 'public', icon: Globe2, title: 'Öffentlich', text: 'Jeder mit Link' },
+              { mode: 'password', icon: KeyRound, title: 'Passwort', text: 'Passwort nötig' },
+              { mode: 'invite', icon: Mail, title: 'Einladung', text: 'Geheimer Link' },
+            ] as const).map((choice) => <button key={choice.mode} type="button" onClick={() => setAccessMode(choice.mode)} aria-pressed={accessMode === choice.mode} className={`rounded-xl border-2 p-3 text-left transition ${accessMode === choice.mode ? 'border-foreground bg-[#d9cffd] shadow-[3px_3px_0_var(--ink)]' : 'border-foreground/25 bg-background hover:border-foreground'}`}><choice.icon className="size-5" /><span className="mt-2 block font-black">{choice.title}</span><span className="text-xs font-semibold text-muted-foreground">{choice.text}</span></button>)}</div>{accessMode === 'password' && <label className="grid gap-2 text-sm font-black" htmlFor="ranking-password"><span className="flex items-center gap-2"><LockKeyhole className="size-4" />Passwort</span><Input id="ranking-password" type="password" required minLength={6} maxLength={100} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="h-12 border-2 border-foreground px-4 font-bold" placeholder="Mindestens 6 Zeichen" /><span className="font-semibold text-muted-foreground">Das Passwort wird nie im Entwurf gespeichert.</span></label>}</fieldset>
+            <label className="grid gap-2 text-sm font-black" htmlFor="ranking-options"><span className="flex items-center justify-between gap-2"><span className="flex items-center gap-2"><span className="grid size-6 place-items-center rounded-full bg-foreground text-xs text-background">5</span>Optionen</span><span className={`rounded-full px-2.5 py-1 text-xs ${parsedOptions.length >= 2 ? 'bg-[#d9f7e4] text-[#125a2f]' : 'bg-muted text-muted-foreground'}`}>{parsedOptions.length}/30</span></span><Textarea id="ranking-options" required className="min-h-40 rounded-xl border-2 border-foreground px-4 py-3 text-base leading-relaxed" value={options} onChange={(event) => setOptions(event.target.value)} /></label>
             {parsedOptions.length > 0 && <div className="flex max-h-24 flex-wrap gap-2 overflow-y-auto rounded-xl bg-muted/60 p-3" aria-label="Erkannte Optionen">{parsedOptions.slice(0, 30).map((option) => <span key={option} className="rounded-lg border border-foreground/20 bg-card px-2.5 py-1 text-xs font-bold">{option}</span>)}</div>}
             {error && <p role="alert" className="rounded-xl border-2 border-[#a31d1d] bg-[#ffe2df] px-4 py-3 text-sm font-bold text-[#8a1717]">{error}</p>}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

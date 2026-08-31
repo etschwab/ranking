@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CheckCircle2, Clock3, Copy, Crown, Download, LockKeyhole, Medal, Pencil, RefreshCw, Share2, Users } from 'lucide-react';
 import { BrandHeader } from '@/components/brand-header';
 import { Button } from '@/components/ui/button';
-import type { RankingData, RankingItem } from '@/db/rankings';
+import { RankingAccessGate } from '@/components/ranking-access-gate';
+import type { RankingAccessMode, RankingData, RankingItem } from '@/db/rankings';
 
 const tiers = [
   { label: 'D', score: 1, color: 'var(--tier-d)' },
@@ -23,14 +24,21 @@ export function RankingResults({ slug }: { slug: string }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [accessMode, setAccessMode] = useState<RankingAccessMode | null>(null);
 
   async function load() {
     setLoading(true);
     try {
       const response = await fetch(`/api/rankings/${slug}`, { cache: 'no-store' });
-      const data = await response.json();
+      const data = await response.json() as RankingData & { error?: string; accessMode?: RankingAccessMode };
+      if (response.status === 403 && data.accessMode) {
+        setAccessMode(data.accessMode);
+        setError('');
+        return;
+      }
       if (!response.ok) throw new Error(data.error ?? 'Ranking nicht gefunden.');
       setRanking(data);
+      setAccessMode(null);
       setError('');
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Ranking nicht gefunden.'); }
     finally { setLoading(false); }
@@ -62,6 +70,7 @@ export function RankingResults({ slug }: { slug: string }) {
   }
 
   if (loading && !ranking) return <main className="min-h-screen bg-background"><BrandHeader /><div className="mx-auto max-w-3xl px-5 py-24 text-center font-black">Auswertung wird geladen…</div></main>;
+  if (accessMode) return <RankingAccessGate slug={slug} accessMode={accessMode} onUnlocked={() => void load()} />;
   if (!ranking) return <main className="min-h-screen bg-background"><BrandHeader /><div className="mx-auto max-w-3xl px-5 py-24 text-center"><h1 className="text-4xl font-black">Nicht gefunden</h1><p className="mt-3 text-muted-foreground">{error}</p></div></main>;
 
   return (

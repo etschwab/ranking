@@ -43,6 +43,13 @@
       "when": 1788199842934,
       "tag": "0005_clammy_sharon_carter",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788200898896,
+      "tag": "0006_broken_fabian_cortez",
+      "breakpoints": true
     }
   ]
 }

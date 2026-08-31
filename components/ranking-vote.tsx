@@ -20,7 +20,8 @@ import {
 import { ArrowDownToLine, BarChart3, CheckCircle2, Clock3, Cloud, Copy, GripVertical, Info, LockKeyhole, LogIn, Pencil, RotateCcw, Send, Share2, Undo2, UserRound, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BrandHeader } from '@/components/brand-header';
-import type { RankingData, RankingItem } from '@/db/rankings';
+import { RankingAccessGate } from '@/components/ranking-access-gate';
+import type { RankingAccessMode, RankingData, RankingItem } from '@/db/rankings';
 
 const tiers = [
   { label: 'S', score: 5, color: 'var(--tier-s)', helper: 'Spitzenklasse' },
@@ -89,6 +90,8 @@ export function RankingVote({ slug }: { slug: string }) {
   const [copied, setCopied] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [liveMessage, setLiveMessage] = useState('');
+  const [accessMode, setAccessMode] = useState<RankingAccessMode | null>(null);
+  const [accessRevision, setAccessRevision] = useState(0);
   const [now, setNow] = useState(Date.now());
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor));
   const collisionDetection = useCallback<CollisionDetection>((args) => {
@@ -102,18 +105,33 @@ export function RankingVote({ slug }: { slug: string }) {
     let cancelled = false;
     async function load() {
       try {
+        const invite = new URLSearchParams(window.location.search).get('invite');
+        if (invite) {
+          const inviteResponse = await fetch(`/api/rankings/${slug}/access`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ invite }) });
+          const inviteData = await inviteResponse.json() as { error?: string };
+          if (!inviteResponse.ok) {
+            if (!cancelled) { setAccessMode('invite'); setError(inviteData.error ?? 'Dieser Einladungslink ist ungültig.'); }
+            return;
+          }
+          window.history.replaceState({}, '', `/r/${slug}`);
+        }
         const [rankingResponse, accountResponse] = await Promise.all([
           fetch(`/api/rankings/${slug}`),
           fetch(`/api/me?returnTo=${encodeURIComponent(`/r/${slug}`)}`),
         ]);
-        const data = await rankingResponse.json() as RankingData & { error?: string };
+        const data = await rankingResponse.json() as RankingData & { error?: string; accessMode?: RankingAccessMode };
         if (accountResponse.ok) {
           const accountData = await accountResponse.json() as { user: { displayName: string; email: string } | null; signInPath: string };
           if (!cancelled) setAccount(accountData);
         }
+        if (rankingResponse.status === 403 && data.accessMode) {
+          if (!cancelled) { setAccessMode(data.accessMode); setError(''); }
+          return;
+        }
         if (!rankingResponse.ok) throw new Error(data.error ?? 'Ranking nicht gefunden.');
         if (cancelled) return;
         setRanking(data);
+        setAccessMode(null);
         const storedToken = localStorage.getItem(`rankly-ballot-${slug}`);
         let loadedSavedVote = false;
         if (storedToken) {
@@ -137,7 +155,7 @@ export function RankingVote({ slug }: { slug: string }) {
     }
     void load();
     return () => { cancelled = true; };
-  }, [slug]);
+  }, [accessRevision, slug]);
 
   useEffect(() => {
     if (!voteReady) return;
@@ -236,6 +254,7 @@ export function RankingVote({ slug }: { slug: string }) {
   }
 
   if (loading) return <main className="min-h-screen bg-background"><BrandHeader /><div className="mx-auto max-w-3xl px-5 py-24 text-center"><p className="font-black">Ranking wird geladen…</p></div></main>;
+  if (accessMode) return <RankingAccessGate slug={slug} accessMode={accessMode} onUnlocked={() => { setLoading(true); setAccessRevision((value) => value + 1); }} />;
   if (!ranking) return <main className="min-h-screen bg-background"><BrandHeader /><div className="mx-auto max-w-3xl px-5 py-24 text-center"><h1 className="text-4xl font-black">Nicht gefunden</h1><p className="mt-3 text-muted-foreground">{error}</p><a href="/" className="mt-6 inline-block font-black text-primary underline">Eigenes Ranking erstellen</a></div></main>;
 
   if (closed) return (

@@ -2,11 +2,16 @@ import { env } from 'cloudflare:workers';
 import { ensureSchema, getRanking } from '@/db/rankings';
 import { chatGPTSignInPath, getChatGPTUser } from '@/app/chatgpt-auth';
 import { getUserProfile } from '@/db/profiles';
+import { getRankingAccess, hasAccess } from '@/db/ranking-access';
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
 export async function GET(request: Request, { params }: RouteContext) {
   const { slug } = await params;
+  const user = await getChatGPTUser();
+  const access = await getRankingAccess(slug, user?.userId);
+  if (!access) return Response.json({ error: 'Ranking nicht gefunden.' }, { status: 404 });
+  if (!hasAccess(request, slug, access)) return Response.json({ error: 'Dieses Ranking ist privat.', accessMode: access.accessMode }, { status: 403 });
   const token = new URL(request.url).searchParams.get('token')?.trim() ?? '';
   if (token.length < 20) return Response.json({ error: 'Ungültiger Bearbeitungslink.' }, { status: 400 });
   const ranking = await getRanking(slug);
@@ -33,6 +38,9 @@ export async function POST(request: Request, { params }: RouteContext) {
         { status: 401 },
       );
     }
+    const access = await getRankingAccess(slug, user.userId);
+    if (!access) return Response.json({ error: 'Ranking nicht gefunden.' }, { status: 404 });
+    if (!hasAccess(request, slug, access)) return Response.json({ error: 'Dieses Ranking ist privat.', accessMode: access.accessMode }, { status: 403 });
     const ranking = await getRanking(slug);
     if (!ranking) return Response.json({ error: 'Ranking nicht gefunden.' }, { status: 404 });
     if (ranking.closesAt !== null && Date.now() >= ranking.closesAt) {

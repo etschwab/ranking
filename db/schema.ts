@@ -7,6 +7,10 @@ export const rankings = sqliteTable('rankings', {
   description: text('description').notNull().default(''),
   createdAt: integer('created_at').notNull(),
   closesAt: integer('closes_at'),
+  accessMode: text('access_mode').notNull().default('public'),
+  passwordHash: text('password_hash'),
+  inviteToken: text('invite_token'),
+  accessToken: text('access_token'),
 });
 
 export const userProfiles = sqliteTable('user_profiles', {
