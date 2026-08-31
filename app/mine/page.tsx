@@ -1,17 +1,19 @@
-import { BarChart3, LogOut, Plus, Users } from 'lucide-react';
+import { BarChart3, LogOut, Plus, UserRound, Users } from 'lucide-react';
 import { requireChatGPTUser, chatGPTSignOutPath } from '@/app/chatgpt-auth';
 import { BrandHeader } from '@/components/brand-header';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { getRankingsForOwner } from '@/db/rankings';
+import { getUserProfile } from '@/db/profiles';
 
 export const dynamic = 'force-dynamic';
 
 export default async function MyRankingsPage() {
   const user = await requireChatGPTUser('/mine');
+  const profile = await getUserProfile(user);
   const rankings = await getRankingsForOwner(user.userId);
   return (
     <main className="min-h-screen bg-background pb-24">
-      <BrandHeader action={<div className="flex items-center gap-3"><span className="hidden text-sm font-bold text-muted-foreground sm:block">{user.displayName}</span><a href={chatGPTSignOutPath('/')} target="_top" className="flex items-center gap-2 text-sm font-black"><LogOut className="size-4" /> Abmelden</a></div>} />
+      <BrandHeader action={<div className="flex items-center gap-3"><a href="/profile" className="flex items-center gap-2 text-sm font-black"><UserRound className="size-4" /><span className="hidden sm:inline">{profile.displayName}</span></a><a href={chatGPTSignOutPath('/')} target="_top" className="flex items-center gap-2 text-sm font-black"><LogOut className="size-4" /> Abmelden</a></div>} />
       <section className="mx-auto max-w-6xl px-5 pt-10 sm:px-8">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div><p className="text-sm font-black uppercase tracking-[0.15em] text-primary">Dein Bereich</p><h1 className="mt-2 text-5xl font-black tracking-[-0.055em] sm:text-6xl">Meine Rankings</h1><p className="mt-3 font-medium text-muted-foreground">Ergebnisse öffnen oder den Abstimmungslink erneut teilen.</p></div>

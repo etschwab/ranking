@@ -60,6 +60,7 @@ export default function Home() {
         <nav className="flex items-center gap-2">
           {account?.user ? <>
             <a href="/mine" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-black hover:bg-muted"><UserRound className="size-4" /> <span className="hidden sm:inline">Meine Rankings</span></a>
+            <a href="/profile" className="hidden rounded-lg px-3 py-2 text-sm font-black hover:bg-muted sm:block">{account.user.displayName}</a>
             <a href={account.signOutPath} target="_top" className="text-sm font-bold text-muted-foreground hover:text-foreground">Abmelden</a>
           </> : account ? <a href={account.signInPath} target="_top" className="flex items-center gap-2 rounded-xl border-2 border-foreground bg-card px-3 py-2 text-sm font-black shadow-[2px_2px_0_var(--ink)]"><LogIn className="size-4" /> Anmelden</a> : <a href="#erstellen" className="text-sm font-bold text-muted-foreground">Ranking erstellen</a>}
         </nav>

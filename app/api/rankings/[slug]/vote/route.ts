@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { ensureSchema, getRanking } from '@/db/rankings';
 import { chatGPTSignInPath, getChatGPTUser } from '@/app/chatgpt-auth';
+import { getUserProfile } from '@/db/profiles';
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
@@ -41,7 +42,8 @@ export async function POST(request: Request, { params }: RouteContext) {
     if (entries.length !== ranking.items.length) return Response.json({ error: 'Bitte ordne jede Option einer Stufe zu.' }, { status: 400 });
     await ensureSchema();
     const db = env.DB;
-    const voterName = user.displayName.trim().slice(0, 50);
+    const profile = await getUserProfile(user);
+    const voterName = profile.displayName;
     const requestedToken = typeof body.editToken === 'string' ? body.editToken.trim() : '';
 
     if (requestedToken) {

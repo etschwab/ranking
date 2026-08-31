@@ -8,6 +8,13 @@ export const rankings = sqliteTable('rankings', {
   createdAt: integer('created_at').notNull(),
 });
 
+export const userProfiles = sqliteTable('user_profiles', {
+  userId: text('user_id').primaryKey(),
+  displayName: text('display_name').notNull(),
+  email: text('email').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
 export const rankingOwners = sqliteTable('ranking_owners', {
   rankingId: text('ranking_id').primaryKey().references(() => rankings.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull(),
