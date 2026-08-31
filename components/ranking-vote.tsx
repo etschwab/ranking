@@ -17,7 +17,7 @@ import {
   type DragStartEvent,
   type CollisionDetection,
 } from '@dnd-kit/core';
-import { ArrowDownToLine, BarChart3, CheckCircle2, Copy, GripVertical, Info, LogIn, Pencil, RotateCcw, Send, Share2, UserRound, Users, X } from 'lucide-react';
+import { ArrowDownToLine, BarChart3, CheckCircle2, Cloud, Copy, GripVertical, Info, LogIn, Pencil, RotateCcw, Send, Share2, Undo2, UserRound, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BrandHeader } from '@/components/brand-header';
 import type { RankingData, RankingItem } from '@/db/rankings';
@@ -79,6 +79,9 @@ export function RankingVote({ slug }: { slug: string }) {
   const [account, setAccount] = useState<{ user: { displayName: string; email: string } | null; signInPath: string } | null>(null);
   const [editToken, setEditToken] = useState<string | null>(null);
   const [hasSavedVote, setHasSavedVote] = useState(false);
+  const [restoredDraft, setRestoredDraft] = useState(false);
+  const [voteReady, setVoteReady] = useState(false);
+  const [scoreHistory, setScoreHistory] = useState<Record<string, number>[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -111,13 +114,23 @@ export function RankingVote({ slug }: { slug: string }) {
         if (cancelled) return;
         setRanking(data);
         const storedToken = localStorage.getItem(`rankly-ballot-${slug}`);
+        let loadedSavedVote = false;
         if (storedToken) {
           const savedResponse = await fetch(`/api/rankings/${slug}/vote?token=${encodeURIComponent(storedToken)}`);
           if (savedResponse.ok) {
             const saved = await savedResponse.json() as { scores: Record<string, number> };
             if (!cancelled) { setEditToken(storedToken); setScores(saved.scores); setHasSavedVote(true); }
+            loadedSavedVote = true;
           } else { localStorage.removeItem(`rankly-ballot-${slug}`); }
         }
+        if (!loadedSavedVote) {
+          try {
+            const draft = JSON.parse(localStorage.getItem(`rankly-vote-draft-${slug}`) ?? '{}') as Record<string, number>;
+            const validDraft = Object.fromEntries(Object.entries(draft).filter(([itemId, score]) => data.items.some((item) => item.id === itemId) && Number.isInteger(score) && score >= 1 && score <= 5));
+            if (Object.keys(validDraft).length > 0 && !cancelled) { setScores(validDraft); setRestoredDraft(true); }
+          } catch { localStorage.removeItem(`rankly-vote-draft-${slug}`); }
+        }
+        if (!cancelled) setVoteReady(true);
       } catch (reason) { if (!cancelled) setError(reason instanceof Error ? reason.message : 'Ranking nicht gefunden.'); }
       finally { if (!cancelled) setLoading(false); }
     }
@@ -125,21 +138,49 @@ export function RankingVote({ slug }: { slug: string }) {
     return () => { cancelled = true; };
   }, [slug]);
 
+  useEffect(() => {
+    if (!voteReady) return;
+    if (Object.keys(scores).length > 0) localStorage.setItem(`rankly-vote-draft-${slug}`, JSON.stringify(scores));
+    else localStorage.removeItem(`rankly-vote-draft-${slug}`);
+  }, [scores, slug, voteReady]);
+
   const assigned = Object.keys(scores).length;
   const complete = ranking ? assigned === ranking.items.length : false;
   const grouped = useMemo(() => new Map(tiers.map((tier) => [tier.score, ranking?.items.filter((item) => scores[item.id] === tier.score) ?? []])), [ranking, scores]);
   const activeItem = ranking?.items.find((item) => item.id === activeId);
 
+  function remember(current: Record<string, number>) {
+    setScoreHistory((history) => [...history.slice(-19), current]);
+  }
   function assign(itemId: string, score: number) {
-    setScores((current) => ({ ...current, [itemId]: score }));
+    remember(scores);
+    setScores({ ...scores, [itemId]: score });
     const item = ranking?.items.find((candidate) => candidate.id === itemId);
     const tier = tiers.find((candidate) => candidate.score === score);
     if (item && tier) setLiveMessage(`${item.label} wurde Stufe ${tier.label} zugeordnet.`);
   }
   function unassign(itemId: string) {
-    setScores((current) => { const next = { ...current }; delete next[itemId]; return next; });
+    remember(scores);
+    const next = { ...scores };
+    delete next[itemId];
+    setScores(next);
     const item = ranking?.items.find((candidate) => candidate.id === itemId);
     if (item) setLiveMessage(`${item.label} wurde zurückgesetzt.`);
+  }
+  function undo() {
+    setScoreHistory((history) => {
+      if (history.length === 0) return history;
+      const previous = history[history.length - 1];
+      setScores(previous);
+      setLiveMessage('Die letzte Änderung wurde rückgängig gemacht.');
+      return history.slice(0, -1);
+    });
+  }
+  function resetScores() {
+    if (Object.keys(scores).length === 0) return;
+    remember(scores);
+    setScores({});
+    setLiveMessage('Alle Zuordnungen wurden zurückgesetzt.');
   }
   function handleDragStart(event: DragStartEvent) {
     const itemId = String(event.active.id);
@@ -178,6 +219,7 @@ export function RankingVote({ slug }: { slug: string }) {
       }
       if (!response.ok || !data.editToken) throw new Error(data.error ?? 'Speichern fehlgeschlagen.');
       localStorage.setItem(`rankly-ballot-${slug}`, data.editToken);
+      localStorage.removeItem(`rankly-vote-draft-${slug}`);
       setEditToken(data.editToken);
       setHasSavedVote(true);
       setSubmitted(true);
@@ -221,6 +263,7 @@ export function RankingVote({ slug }: { slug: string }) {
           <div className="flex items-center gap-2 font-black text-muted-foreground"><Users className="size-5" /> {ranking.ballotCount} {ranking.ballotCount === 1 ? 'Stimme' : 'Stimmen'}</div>
         </div>
         {hasSavedVote && <div className="mt-7 flex items-center gap-2 rounded-xl border-2 border-[#18713b] bg-[#d9f7e4] px-4 py-3 font-bold text-[#125a2f]"><Pencil className="size-5" /> Deine gespeicherte Abstimmung ist geladen und kann geändert werden.</div>}
+        {restoredDraft && !hasSavedVote && <div className="mt-7 flex items-center gap-2 rounded-xl border-2 border-primary bg-[#e9e4ff] px-4 py-3 font-bold text-primary"><Cloud className="size-5" /> Dein letzter Entwurf wurde auf diesem Gerät wiederhergestellt.</div>}
 
         <div className="mt-8 grid gap-4 rounded-[1.5rem] border-2 border-foreground bg-card p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-6">
           <div><div className="flex items-center gap-2"><Info className="size-5 text-primary" /><h2 className="font-black">So funktioniert’s</h2></div><p className="mt-1 text-sm font-semibold text-muted-foreground">Ziehe Optionen in eine Stufe oder tippe direkt auf S bis D. Bereits einsortierte Optionen kannst du jederzeit weiterziehen.</p></div>
@@ -247,7 +290,7 @@ export function RankingVote({ slug }: { slug: string }) {
           <Button disabled={!complete || submitting} onClick={submitVote} className="h-12 border-2 border-foreground px-6 text-base font-black shadow-[3px_3px_0_var(--ink)]">{submitting ? 'Wird gespeichert…' : complete ? hasSavedVote ? 'Änderungen speichern' : 'Abstimmung senden' : `Noch ${ranking.items.length - assigned} einordnen`} <Send /></Button>
         </section>
         {error && <p role="alert" className="mt-5 rounded-xl border-2 border-[#a31d1d] bg-[#ffe2df] px-4 py-3 font-bold text-[#8a1717]">{error}</p>}
-        {assigned > 0 && <button onClick={() => setScores({})} className="mt-5 flex items-center gap-2 text-sm font-black text-muted-foreground hover:text-foreground"><RotateCcw className="size-4" /> Auswahl zurücksetzen</button>}
+        <div className="mt-5 flex flex-wrap gap-4">{scoreHistory.length > 0 && <button onClick={undo} className="flex items-center gap-2 text-sm font-black text-primary hover:underline"><Undo2 className="size-4" /> Letzte Änderung rückgängig</button>}{assigned > 0 && <button onClick={resetScores} className="flex items-center gap-2 text-sm font-black text-muted-foreground hover:text-foreground"><RotateCcw className="size-4" /> Alles zurücksetzen</button>}</div>
       </section>
     </main>
   );

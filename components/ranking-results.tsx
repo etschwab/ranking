@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CheckCircle2, Copy, Medal, Pencil, RefreshCw, Share2, Users } from 'lucide-react';
+import { BarChart3, CheckCircle2, Copy, Crown, Download, Medal, Pencil, RefreshCw, Share2, Users } from 'lucide-react';
 import { BrandHeader } from '@/components/brand-header';
 import { Button } from '@/components/ui/button';
 import type { RankingData, RankingItem } from '@/db/rankings';
@@ -45,12 +45,28 @@ export function RankingResults({ slug }: { slug: string }) {
     window.setTimeout(() => setCopied(false), 1600);
   }
 
+  function exportCsv() {
+    if (!ranking) return;
+    const escapeCell = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
+    const rows = [
+      ['Rang', 'Option', 'Durchschnitt', 'Stimmen'],
+      ...sorted.map((item, index) => [index + 1, item.label, item.average?.toFixed(2) ?? '', item.votes]),
+    ];
+    const csv = `\uFEFF${rows.map((row) => row.map(escapeCell).join(';')).join('\n')}`;
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${ranking.slug}-auswertung.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   if (loading && !ranking) return <main className="min-h-screen bg-background"><BrandHeader /><div className="mx-auto max-w-3xl px-5 py-24 text-center font-black">Auswertung wird geladen…</div></main>;
   if (!ranking) return <main className="min-h-screen bg-background"><BrandHeader /><div className="mx-auto max-w-3xl px-5 py-24 text-center"><h1 className="text-4xl font-black">Nicht gefunden</h1><p className="mt-3 text-muted-foreground">{error}</p></div></main>;
 
   return (
     <main className="rankly-page min-h-screen pb-24">
-      <BrandHeader action={<div className="flex items-center gap-2"><a href={`/r/${slug}`} className="hidden h-9 items-center gap-2 rounded-lg px-3 text-sm font-black hover:bg-muted sm:inline-flex"><Pencil className="size-4" /> Meine Stimme</a><Button variant="outline" onClick={copyVoteLink} className="border-2 border-foreground font-black">{copied ? <CheckCircle2 /> : <Share2 />}<span className="hidden sm:inline">{copied ? 'Link kopiert' : 'Abstimmung teilen'}</span></Button></div>} />
+      <BrandHeader action={<div className="flex items-center gap-2"><button onClick={exportCsv} className="inline-flex h-9 items-center gap-2 rounded-lg px-2 text-sm font-black hover:bg-muted md:px-3" aria-label="Auswertung als CSV herunterladen"><Download className="size-4" /><span className="hidden md:inline">CSV</span></button><a href={`/r/${slug}`} className="hidden h-9 items-center gap-2 rounded-lg px-3 text-sm font-black hover:bg-muted sm:inline-flex"><Pencil className="size-4" /> Meine Stimme</a><Button variant="outline" onClick={copyVoteLink} className="border-2 border-foreground font-black">{copied ? <CheckCircle2 /> : <Share2 />}<span className="hidden sm:inline">{copied ? 'Link kopiert' : 'Teilen'}</span></Button></div>} />
       <section className="mx-auto max-w-6xl px-5 pt-8 sm:px-8 sm:pt-12">
         <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
           <div><p className="text-sm font-black uppercase tracking-[0.15em] text-primary">Live-Auswertung</p><h1 className="mt-2 max-w-3xl text-4xl font-black tracking-[-0.05em] sm:text-6xl">{ranking.title}</h1>{ranking.description && <p className="mt-4 max-w-2xl text-lg font-medium text-muted-foreground">{ranking.description}</p>}</div>
@@ -65,6 +81,7 @@ export function RankingResults({ slug }: { slug: string }) {
           </div>
         ) : (
           <>
+            <section className="mt-10"><div className="mb-4 flex items-center gap-2"><Crown className="size-5 text-primary" /><h2 className="text-sm font-black uppercase tracking-[0.14em] text-primary">Euer Top 3 Podium</h2></div><ol className="grid gap-4 sm:grid-cols-3">{sorted.slice(0, 3).map((item, index) => { const tier = resultTier(item); return <li key={item.id} className={`rankly-card relative overflow-hidden rounded-[1.35rem] border-[3px] border-foreground bg-card p-5 shadow-[5px_5px_0_var(--ink)] ${index === 0 ? 'sm:-translate-y-2' : ''}`}><div className="absolute right-0 top-0 grid size-12 place-items-center rounded-bl-2xl border-b-2 border-l-2 border-foreground text-xl font-black" style={{ background: index === 0 ? '#fff1a8' : index === 1 ? '#e7e4df' : '#f3c6a8' }}>#{index + 1}</div><span className="grid size-12 place-items-center rounded-xl border-2 border-foreground text-xl font-black" style={{ background: tier.color }}>{tier.label}</span><h3 className="mt-5 pr-8 text-xl font-black">{item.label}</h3><p className="mt-1 text-sm font-bold text-muted-foreground">Ø {item.average?.toFixed(2)} · {item.votes} {item.votes === 1 ? 'Stimme' : 'Stimmen'}</p></li>; })}</ol></section>
             <div className="mt-12 grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
               <section className="rounded-[1.75rem] border-[3px] border-foreground bg-card p-5 shadow-[7px_7px_0_var(--ink)] sm:p-7">
                 <div className="mb-5 flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl border-2 border-foreground bg-[#fff1a8]"><Medal /></span><div><p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Gesamtrangliste</p><h2 className="text-2xl font-black">Eure Favoriten</h2></div></div>
