@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 
 export type RankingItem = { id: string; label: string; position: number; average: number | null; votes: number; distribution: Record<string, number> };
 export type RankingData = { id: string; slug: string; title: string; description: string; createdAt: number; ballotCount: number; items: RankingItem[] };
+export type EditableRankingItem = { id?: string; label: string };
 
 let schemaReady = false;
 
@@ -64,6 +65,54 @@ export async function getRanking(slug: string): Promise<RankingData | null> {
       return { ...item, votes: result?.total ?? 0, average: result ? result.sum / result.total : null, distribution: result?.distribution ?? {} };
     }),
   };
+}
+
+export async function getOwnedRanking(slug: string, userId: string): Promise<RankingData | null> {
+  await ensureSchema();
+  const owned = await env.DB.prepare(`
+    SELECT r.id
+    FROM rankings r
+    JOIN ranking_owners o ON o.ranking_id = r.id
+    WHERE r.slug = ? AND o.user_id = ?
+  `).bind(slug, userId).first<{ id: string }>();
+  return owned ? getRanking(slug) : null;
+}
+
+export async function updateOwnedRanking(
+  slug: string,
+  userId: string,
+  input: { title: string; description: string; items: EditableRankingItem[] },
+) {
+  await ensureSchema();
+  const db = env.DB;
+  const ranking = await db.prepare(`
+    SELECT r.id
+    FROM rankings r
+    JOIN ranking_owners o ON o.ranking_id = r.id
+    WHERE r.slug = ? AND o.user_id = ?
+  `).bind(slug, userId).first<{ id: string }>();
+  if (!ranking) return false;
+
+  const existingRows = await db.prepare('SELECT id FROM items WHERE ranking_id = ?').bind(ranking.id).all<{ id: string }>();
+  const existingIds = new Set(existingRows.results.map((item) => item.id));
+  const keptIds = input.items.flatMap((item) => item.id && existingIds.has(item.id) ? [item.id] : []);
+  const placeholders = keptIds.map(() => '?').join(', ');
+  const deleteScores = keptIds.length > 0
+    ? db.prepare(`DELETE FROM scores WHERE item_id IN (SELECT id FROM items WHERE ranking_id = ? AND id NOT IN (${placeholders}))`).bind(ranking.id, ...keptIds)
+    : db.prepare('DELETE FROM scores WHERE item_id IN (SELECT id FROM items WHERE ranking_id = ?)').bind(ranking.id);
+  const deleteItems = keptIds.length > 0
+    ? db.prepare(`DELETE FROM items WHERE ranking_id = ? AND id NOT IN (${placeholders})`).bind(ranking.id, ...keptIds)
+    : db.prepare('DELETE FROM items WHERE ranking_id = ?').bind(ranking.id);
+
+  await db.batch([
+    db.prepare('UPDATE rankings SET title = ?, description = ? WHERE id = ?').bind(input.title, input.description, ranking.id),
+    deleteScores,
+    deleteItems,
+    ...input.items.map((item, position) => item.id && existingIds.has(item.id)
+      ? db.prepare('UPDATE items SET label = ?, position = ? WHERE id = ? AND ranking_id = ?').bind(item.label, position, item.id, ranking.id)
+      : db.prepare('INSERT INTO items (id, ranking_id, label, position) VALUES (?, ?, ?, ?)').bind(crypto.randomUUID(), ranking.id, item.label, position)),
+  ]);
+  return true;
 }
 
 export function createSlug() {
