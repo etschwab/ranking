@@ -1,20 +1,23 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   closestCenter,
   DndContext,
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
+  pointerWithin,
+  rectIntersection,
   useDraggable,
   useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
+  type CollisionDetection,
 } from '@dnd-kit/core';
-import { BarChart3, CheckCircle2, Copy, GripVertical, LogIn, Pencil, RotateCcw, Send, Share2, UserRound, Users } from 'lucide-react';
+import { ArrowDownToLine, BarChart3, CheckCircle2, Copy, GripVertical, Info, LogIn, Pencil, RotateCcw, Send, Share2, UserRound, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BrandHeader } from '@/components/brand-header';
 import type { RankingData, RankingItem } from '@/db/rankings';
@@ -30,28 +33,26 @@ const tiers = [
 function DraggableChip({ item, onUnassign }: { item: RankingItem; onUnassign: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: item.id });
   return (
-    <button
+    <div
       ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      onClick={onUnassign}
-      className="touch-none cursor-grab rounded-xl border-2 border-foreground bg-background px-3 py-2.5 text-left text-sm font-black shadow-[2px_2px_0_var(--ink)] transition hover:-translate-y-0.5 active:cursor-grabbing"
+      className="flex items-center overflow-hidden rounded-xl border-2 border-foreground bg-background text-sm font-black shadow-[2px_2px_0_var(--ink)] transition focus-within:ring-4 focus-within:ring-primary/25 hover:-translate-y-0.5"
       style={{ transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined, opacity: isDragging ? 0.25 : 1 }}
-      title="Ziehen, um die Stufe zu ändern · Klicken, um zurückzusetzen"
     >
-      <span className="flex items-center gap-1.5"><GripVertical className="size-3.5 opacity-50" />{item.label}</span>
-    </button>
+      <button {...listeners} {...attributes} className="flex touch-none cursor-grab items-center gap-1.5 px-3 py-2.5 text-left active:cursor-grabbing" aria-label={`${item.label} in eine andere Stufe ziehen`}><GripVertical className="size-3.5 opacity-50" />{item.label}</button>
+      <button onClick={onUnassign} className="grid self-stretch place-items-center border-l-2 border-foreground px-2 text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label={`${item.label} zurück zu Noch einordnen`} title="Zurück zu Noch einordnen"><X className="size-3.5" /></button>
+    </div>
   );
 }
 
-function TierRow({ tier, items, last, unassign }: { tier: (typeof tiers)[number]; items: RankingItem[]; last: boolean; unassign: (id: string) => void }) {
+function TierRow({ tier, items, last, unassign, dragging }: { tier: (typeof tiers)[number]; items: RankingItem[]; last: boolean; unassign: (id: string) => void; dragging: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: `tier-${tier.score}` });
   return (
-    <div ref={setNodeRef} className={`grid min-h-20 grid-cols-[70px_1fr] transition-colors sm:grid-cols-[100px_1fr] ${!last ? 'border-b-[3px] border-foreground' : ''} ${isOver ? 'bg-[#e9e4ff]' : ''}`}>
+    <div ref={setNodeRef} className={`relative grid min-h-24 grid-cols-[72px_1fr] transition-all sm:grid-cols-[112px_1fr] ${!last ? 'border-b-[3px] border-foreground' : ''} ${isOver ? 'z-10 bg-[#e9e4ff] ring-4 ring-inset ring-primary' : dragging ? 'bg-primary/[0.035]' : ''}`}>
       <div className="grid place-items-center border-r-[3px] border-foreground" style={{ background: tier.color }}><span className="text-3xl font-black sm:text-4xl">{tier.label}</span><span className="hidden text-[10px] font-black uppercase tracking-wider opacity-65 sm:block">{tier.helper}</span></div>
-      <div className="flex flex-wrap items-center gap-2.5 p-3">
+      <div className="flex flex-wrap content-center items-center gap-2.5 p-3 sm:p-4">
         {items.map((item) => <DraggableChip key={item.id} item={item} onUnassign={() => unassign(item.id)} />)}
-        {!items.length && <span className={`text-sm font-bold ${isOver ? 'text-primary' : 'text-muted-foreground/50'}`}>{isOver ? `Hier in ${tier.label} ablegen` : 'Hierher ziehen'}</span>}
+        {!items.length && <span className={`flex items-center gap-2 text-sm font-bold ${isOver ? 'text-primary' : 'text-muted-foreground/50'}`}><ArrowDownToLine className="size-4" />{isOver ? `In ${tier.label} ablegen` : `${tier.helper} – hier ablegen`}</span>}
+        {isOver && items.length > 0 && <span className="flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-black text-primary-foreground"><ArrowDownToLine className="size-3.5" /> Hier ablegen</span>}
       </div>
     </div>
   );
@@ -67,9 +68,9 @@ function UnrankedCard({ item, assign }: { item: RankingItem; assign: (score: num
   );
 }
 
-function UnrankedZone({ children }: { children: React.ReactNode }) {
+function UnrankedZone({ children, dragging }: { children: React.ReactNode; dragging: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: 'unranked' });
-  return <section ref={setNodeRef} className={`mt-10 rounded-[1.5rem] border-2 border-foreground p-5 transition-colors sm:p-7 ${isOver ? 'bg-[#e9e4ff]' : 'bg-[#fff5e7]'}`}>{children}</section>;
+  return <section ref={setNodeRef} className={`mt-8 rounded-[1.5rem] border-[3px] p-5 transition-all sm:p-7 ${isOver ? 'border-primary bg-[#e9e4ff] ring-4 ring-primary/20' : dragging ? 'border-dashed border-foreground bg-[#fff5e7]' : 'border-foreground bg-[#fff5e7]'}`}>{children}</section>;
 }
 
 export function RankingVote({ slug }: { slug: string }) {
@@ -84,7 +85,14 @@ export function RankingVote({ slug }: { slug: string }) {
   const [submitted, setSubmitted] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [liveMessage, setLiveMessage] = useState('');
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor));
+  const collisionDetection = useCallback<CollisionDetection>((args) => {
+    const pointerCollisions = pointerWithin(args);
+    if (pointerCollisions.length > 0) return pointerCollisions;
+    const intersections = rectIntersection(args);
+    return intersections.length > 0 ? intersections : closestCenter(args);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,8 +130,23 @@ export function RankingVote({ slug }: { slug: string }) {
   const grouped = useMemo(() => new Map(tiers.map((tier) => [tier.score, ranking?.items.filter((item) => scores[item.id] === tier.score) ?? []])), [ranking, scores]);
   const activeItem = ranking?.items.find((item) => item.id === activeId);
 
-  function unassign(itemId: string) { setScores((current) => { const next = { ...current }; delete next[itemId]; return next; }); }
-  function handleDragStart(event: DragStartEvent) { setActiveId(String(event.active.id)); }
+  function assign(itemId: string, score: number) {
+    setScores((current) => ({ ...current, [itemId]: score }));
+    const item = ranking?.items.find((candidate) => candidate.id === itemId);
+    const tier = tiers.find((candidate) => candidate.score === score);
+    if (item && tier) setLiveMessage(`${item.label} wurde Stufe ${tier.label} zugeordnet.`);
+  }
+  function unassign(itemId: string) {
+    setScores((current) => { const next = { ...current }; delete next[itemId]; return next; });
+    const item = ranking?.items.find((candidate) => candidate.id === itemId);
+    if (item) setLiveMessage(`${item.label} wurde zurückgesetzt.`);
+  }
+  function handleDragStart(event: DragStartEvent) {
+    const itemId = String(event.active.id);
+    setActiveId(itemId);
+    const item = ranking?.items.find((candidate) => candidate.id === itemId);
+    if (item) setLiveMessage(`${item.label} wird verschoben.`);
+  }
   function handleDragEnd(event: DragEndEvent) {
     setActiveId(null);
     if (!event.over) return;
@@ -132,7 +155,7 @@ export function RankingVote({ slug }: { slug: string }) {
     if (target === 'unranked') unassign(itemId);
     else if (target.startsWith('tier-')) {
       const score = Number(target.slice(5));
-      if (score >= 1 && score <= 5) setScores((current) => ({ ...current, [itemId]: score }));
+      if (score >= 1 && score <= 5) assign(itemId, score);
     }
   }
 
@@ -199,23 +222,29 @@ export function RankingVote({ slug }: { slug: string }) {
         </div>
         {hasSavedVote && <div className="mt-7 flex items-center gap-2 rounded-xl border-2 border-[#18713b] bg-[#d9f7e4] px-4 py-3 font-bold text-[#125a2f]"><Pencil className="size-5" /> Deine gespeicherte Abstimmung ist geladen und kann geändert werden.</div>}
 
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveId(null)}>
-          <div className="mt-10 overflow-hidden rounded-[1.5rem] border-[3px] border-foreground bg-card shadow-[7px_7px_0_var(--ink)]">
-            {tiers.map((tier, index) => <TierRow key={tier.score} tier={tier} items={grouped.get(tier.score) ?? []} last={index === tiers.length - 1} unassign={unassign} />)}
+        <div className="mt-8 grid gap-4 rounded-[1.5rem] border-2 border-foreground bg-card p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-6">
+          <div><div className="flex items-center gap-2"><Info className="size-5 text-primary" /><h2 className="font-black">So funktioniert’s</h2></div><p className="mt-1 text-sm font-semibold text-muted-foreground">Ziehe Optionen in eine Stufe oder tippe direkt auf S bis D. Bereits einsortierte Optionen kannst du jederzeit weiterziehen.</p></div>
+          <div className="min-w-40"><div className="mb-2 flex justify-between text-xs font-black"><span>Fortschritt</span><span>{assigned}/{ranking.items.length}</span></div><div className="h-3 overflow-hidden rounded-full border-2 border-foreground bg-muted"><div className="h-full bg-primary transition-[width] duration-300" style={{ width: `${(assigned / ranking.items.length) * 100}%` }} /></div></div>
+        </div>
+
+        <p className="sr-only" aria-live="polite">{liveMessage}</p>
+        <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveId(null)}>
+          <div className="mt-6 overflow-hidden rounded-[1.5rem] border-[3px] border-foreground bg-card shadow-[7px_7px_0_var(--ink)]">
+            {tiers.map((tier, index) => <TierRow key={tier.score} tier={tier} items={grouped.get(tier.score) ?? []} last={index === tiers.length - 1} unassign={unassign} dragging={Boolean(activeId)} />)}
           </div>
 
-          <UnrankedZone>
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-2xl font-black tracking-tight">Noch einordnen</h2><p className="text-sm font-semibold text-muted-foreground">Ziehe jede Option in eine Stufe – oder tippe auf S bis D.</p></div><span className="rounded-full border-2 border-foreground bg-card px-3 py-1.5 text-sm font-black">{assigned}/{ranking.items.length} fertig</span></div>
-            <div className="grid gap-3 md:grid-cols-2">{ranking.items.filter((item) => !scores[item.id]).map((item) => <UnrankedCard key={item.id} item={item} assign={(score) => setScores((current) => ({ ...current, [item.id]: score }))} />)}</div>
-            {complete && <div className="mt-6 flex items-center gap-2 rounded-xl border-2 border-[#18713b] bg-[#d9f7e4] px-4 py-3 font-bold text-[#125a2f]"><CheckCircle2 className="size-5" /> Alles eingeordnet – du kannst speichern oder weiter umsortieren.</div>}
+          <UnrankedZone dragging={Boolean(activeId)}>
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-2xl font-black tracking-tight">Noch einordnen</h2><p className="text-sm font-semibold text-muted-foreground">Nicht sicher? Du kannst jede Entscheidung später ändern.</p></div>{activeId && scores[activeId] && <span className="flex items-center gap-2 rounded-full border-2 border-foreground bg-card px-3 py-1.5 text-sm font-black"><RotateCcw className="size-4" /> Hier ablegen zum Zurücksetzen</span>}</div>
+            <div className="grid gap-3 md:grid-cols-2">{ranking.items.filter((item) => !scores[item.id]).map((item) => <UnrankedCard key={item.id} item={item} assign={(score) => assign(item.id, score)} />)}</div>
+            {complete && <div className="flex items-center gap-3 rounded-xl border-2 border-[#18713b] bg-[#d9f7e4] px-4 py-4 font-bold text-[#125a2f]"><CheckCircle2 className="size-6 shrink-0" /><div><p className="font-black">Alles eingeordnet!</p><p className="text-sm">Prüfe deine Auswahl oder speichere sie direkt.</p></div></div>}
           </UnrankedZone>
 
           <DragOverlay>{activeItem ? <div className="rotate-2 rounded-xl border-2 border-foreground bg-card px-4 py-3 font-black shadow-[5px_5px_0_var(--ink)]"><span className="flex items-center gap-2"><GripVertical className="size-4" />{activeItem.label}</span></div> : null}</DragOverlay>
         </DndContext>
 
-        <section className="mt-8 flex flex-col gap-4 rounded-[1.5rem] border-[3px] border-foreground bg-card p-5 shadow-[5px_5px_0_var(--ink)] sm:flex-row sm:items-center sm:justify-between sm:p-6">
+        <section className="sticky bottom-4 z-20 mt-8 flex flex-col gap-4 rounded-[1.5rem] border-[3px] border-foreground bg-card/95 p-4 shadow-[7px_7px_0_var(--ink)] backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl border-2 border-foreground bg-[#d9cffd]"><UserRound className="size-5" /></span><div><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Du stimmst ab als</p><p className="font-black">{account?.user?.displayName ?? 'Angemeldete Person'}</p></div></div>
-          <Button disabled={!complete || submitting} onClick={submitVote} className="h-12 border-2 border-foreground px-6 text-base font-black shadow-[3px_3px_0_var(--ink)]">{submitting ? 'Wird gespeichert…' : hasSavedVote ? 'Änderungen speichern' : 'Abstimmung senden'} <Send /></Button>
+          <Button disabled={!complete || submitting} onClick={submitVote} className="h-12 border-2 border-foreground px-6 text-base font-black shadow-[3px_3px_0_var(--ink)]">{submitting ? 'Wird gespeichert…' : complete ? hasSavedVote ? 'Änderungen speichern' : 'Abstimmung senden' : `Noch ${ranking.items.length - assigned} einordnen`} <Send /></Button>
         </section>
         {error && <p role="alert" className="mt-5 rounded-xl border-2 border-[#a31d1d] bg-[#ffe2df] px-4 py-3 font-bold text-[#8a1717]">{error}</p>}
         {assigned > 0 && <button onClick={() => setScores({})} className="mt-5 flex items-center gap-2 text-sm font-black text-muted-foreground hover:text-foreground"><RotateCcw className="size-4" /> Auswahl zurücksetzen</button>}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CheckCircle2, Copy, Medal, RefreshCw, Share2, Users } from 'lucide-react';
+import { BarChart3, CheckCircle2, Copy, Medal, Pencil, RefreshCw, Share2, Users } from 'lucide-react';
 import { BrandHeader } from '@/components/brand-header';
 import { Button } from '@/components/ui/button';
 import type { RankingData, RankingItem } from '@/db/rankings';
@@ -50,7 +50,7 @@ export function RankingResults({ slug }: { slug: string }) {
 
   return (
     <main className="min-h-screen bg-background pb-24">
-      <BrandHeader action={<Button variant="outline" onClick={copyVoteLink} className="border-2 border-foreground font-black">{copied ? <CheckCircle2 /> : <Share2 />}<span className="hidden sm:inline">{copied ? 'Link kopiert' : 'Abstimmung teilen'}</span></Button>} />
+      <BrandHeader action={<div className="flex items-center gap-2"><a href={`/r/${slug}`} className="hidden h-9 items-center gap-2 rounded-lg px-3 text-sm font-black hover:bg-muted sm:inline-flex"><Pencil className="size-4" /> Meine Stimme</a><Button variant="outline" onClick={copyVoteLink} className="border-2 border-foreground font-black">{copied ? <CheckCircle2 /> : <Share2 />}<span className="hidden sm:inline">{copied ? 'Link kopiert' : 'Abstimmung teilen'}</span></Button></div>} />
       <section className="mx-auto max-w-6xl px-5 pt-8 sm:px-8 sm:pt-12">
         <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
           <div><p className="text-sm font-black uppercase tracking-[0.15em] text-primary">Live-Auswertung</p><h1 className="mt-2 max-w-3xl text-4xl font-black tracking-[-0.05em] sm:text-6xl">{ranking.title}</h1>{ranking.description && <p className="mt-4 max-w-2xl text-lg font-medium text-muted-foreground">{ranking.description}</p>}</div>

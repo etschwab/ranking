@@ -81,7 +81,7 @@ export default function Home() {
             <Button size="lg" className="h-12 rounded-xl border-2 border-foreground px-5 text-base font-black shadow-[4px_4px_0_var(--ink)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[2px_2px_0_var(--ink)]" onClick={() => document.querySelector('#erstellen')?.scrollIntoView({ behavior: 'smooth' })}>
               <Plus className="size-5" /> Ranking starten
             </Button>
-            <div className="flex items-center gap-2 px-2 text-sm font-bold text-muted-foreground"><Check className="size-4 text-[#159947]" /> Ohne Anmeldung</div>
+            <div className="flex items-center gap-2 px-2 text-sm font-bold text-muted-foreground"><Check className="size-4 text-[#159947]" /> In einer Minute bereit</div>
           </div>
         </div>
 
