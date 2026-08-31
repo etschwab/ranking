@@ -14,9 +14,8 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { BarChart3, CheckCircle2, Copy, GripVertical, Pencil, RotateCcw, Send, Share2, Users } from 'lucide-react';
+import { BarChart3, CheckCircle2, Copy, GripVertical, LogIn, Pencil, RotateCcw, Send, Share2, UserRound, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { BrandHeader } from '@/components/brand-header';
 import type { RankingData, RankingItem } from '@/db/rankings';
 
@@ -76,7 +75,7 @@ function UnrankedZone({ children }: { children: React.ReactNode }) {
 export function RankingVote({ slug }: { slug: string }) {
   const [ranking, setRanking] = useState<RankingData | null>(null);
   const [scores, setScores] = useState<Record<string, number>>({});
-  const [voterName, setVoterName] = useState('');
+  const [account, setAccount] = useState<{ user: { displayName: string; email: string } | null; signInPath: string } | null>(null);
   const [editToken, setEditToken] = useState<string | null>(null);
   const [hasSavedVote, setHasSavedVote] = useState(false);
   const [error, setError] = useState('');
@@ -91,17 +90,24 @@ export function RankingVote({ slug }: { slug: string }) {
     let cancelled = false;
     async function load() {
       try {
-        const response = await fetch(`/api/rankings/${slug}`);
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error ?? 'Ranking nicht gefunden.');
+        const [rankingResponse, accountResponse] = await Promise.all([
+          fetch(`/api/rankings/${slug}`),
+          fetch(`/api/me?returnTo=${encodeURIComponent(`/r/${slug}`)}`),
+        ]);
+        const data = await rankingResponse.json() as RankingData & { error?: string };
+        if (accountResponse.ok) {
+          const accountData = await accountResponse.json() as { user: { displayName: string; email: string } | null; signInPath: string };
+          if (!cancelled) setAccount(accountData);
+        }
+        if (!rankingResponse.ok) throw new Error(data.error ?? 'Ranking nicht gefunden.');
         if (cancelled) return;
         setRanking(data);
         const storedToken = localStorage.getItem(`rankly-ballot-${slug}`);
         if (storedToken) {
           const savedResponse = await fetch(`/api/rankings/${slug}/vote?token=${encodeURIComponent(storedToken)}`);
           if (savedResponse.ok) {
-            const saved = await savedResponse.json() as { voterName: string; scores: Record<string, number> };
-            if (!cancelled) { setEditToken(storedToken); setVoterName(saved.voterName); setScores(saved.scores); setHasSavedVote(true); }
+            const saved = await savedResponse.json() as { scores: Record<string, number> };
+            if (!cancelled) { setEditToken(storedToken); setScores(saved.scores); setHasSavedVote(true); }
           } else { localStorage.removeItem(`rankly-ballot-${slug}`); }
         }
       } catch (reason) { if (!cancelled) setError(reason instanceof Error ? reason.message : 'Ranking nicht gefunden.'); }
@@ -141,8 +147,12 @@ export function RankingVote({ slug }: { slug: string }) {
     setSubmitting(true);
     setError('');
     try {
-      const response = await fetch(`/api/rankings/${slug}/vote`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ voterName, scores, editToken }) });
-      const data = await response.json() as { error?: string; editToken?: string; updated?: boolean };
+      const response = await fetch(`/api/rankings/${slug}/vote`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scores, editToken }) });
+      const data = await response.json() as { error?: string; editToken?: string; updated?: boolean; signInPath?: string };
+      if (response.status === 401 && data.signInPath) {
+        window.location.href = data.signInPath;
+        return;
+      }
       if (!response.ok || !data.editToken) throw new Error(data.error ?? 'Speichern fehlgeschlagen.');
       localStorage.setItem(`rankly-ballot-${slug}`, data.editToken);
       setEditToken(data.editToken);
@@ -154,6 +164,18 @@ export function RankingVote({ slug }: { slug: string }) {
 
   if (loading) return <main className="min-h-screen bg-background"><BrandHeader /><div className="mx-auto max-w-3xl px-5 py-24 text-center"><p className="font-black">Ranking wird geladen…</p></div></main>;
   if (!ranking) return <main className="min-h-screen bg-background"><BrandHeader /><div className="mx-auto max-w-3xl px-5 py-24 text-center"><h1 className="text-4xl font-black">Nicht gefunden</h1><p className="mt-3 text-muted-foreground">{error}</p><a href="/" className="mt-6 inline-block font-black text-primary underline">Eigenes Ranking erstellen</a></div></main>;
+
+  if (account && !account.user) return (
+    <main className="min-h-screen bg-background"><BrandHeader />
+      <section className="mx-auto flex max-w-2xl flex-col items-center px-5 py-20 text-center">
+        <span className="grid size-20 place-items-center rounded-[1.7rem] border-[3px] border-foreground bg-[#d9cffd] shadow-[6px_6px_0_var(--ink)]"><UserRound className="size-10" /></span>
+        <p className="mt-8 text-sm font-black uppercase tracking-[0.15em] text-primary">Persönlich abstimmen</p>
+        <h1 className="mt-2 text-5xl font-black tracking-[-0.055em]">Melde dich mit deinem Namen an.</h1>
+        <p className="mt-4 max-w-lg text-lg font-medium text-muted-foreground">Dein Profilname wird automatisch bei deiner Abstimmung gespeichert. Eine separate Namenseingabe ist nicht mehr nötig.</p>
+        <a href={account.signInPath} target="_top" className="mt-8 inline-flex h-12 items-center gap-2 rounded-xl border-2 border-foreground bg-primary px-6 text-base font-black text-primary-foreground shadow-[3px_3px_0_var(--ink)]"><LogIn className="size-5" /> Anmelden und abstimmen</a>
+      </section>
+    </main>
+  );
 
   if (submitted) return (
     <main className="min-h-screen bg-background"><BrandHeader />
@@ -191,8 +213,8 @@ export function RankingVote({ slug }: { slug: string }) {
           <DragOverlay>{activeItem ? <div className="rotate-2 rounded-xl border-2 border-foreground bg-card px-4 py-3 font-black shadow-[5px_5px_0_var(--ink)]"><span className="flex items-center gap-2"><GripVertical className="size-4" />{activeItem.label}</span></div> : null}</DragOverlay>
         </DndContext>
 
-        <section className="mt-8 flex flex-col gap-4 rounded-[1.5rem] border-[3px] border-foreground bg-card p-5 shadow-[5px_5px_0_var(--ink)] sm:flex-row sm:items-end sm:p-6">
-          <label className="flex-1 text-sm font-black">Dein Name <span className="font-semibold text-muted-foreground">(optional)</span><Input value={voterName} onChange={(event) => setVoterName(event.target.value)} maxLength={50} placeholder="z. B. Etienne" className="mt-2 h-12 border-2 border-foreground px-4" /></label>
+        <section className="mt-8 flex flex-col gap-4 rounded-[1.5rem] border-[3px] border-foreground bg-card p-5 shadow-[5px_5px_0_var(--ink)] sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl border-2 border-foreground bg-[#d9cffd]"><UserRound className="size-5" /></span><div><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Du stimmst ab als</p><p className="font-black">{account?.user?.displayName ?? 'Angemeldete Person'}</p></div></div>
           <Button disabled={!complete || submitting} onClick={submitVote} className="h-12 border-2 border-foreground px-6 text-base font-black shadow-[3px_3px_0_var(--ink)]">{submitting ? 'Wird gespeichert…' : hasSavedVote ? 'Änderungen speichern' : 'Abstimmung senden'} <Send /></Button>
         </section>
         {error && <p role="alert" className="mt-5 rounded-xl border-2 border-[#a31d1d] bg-[#ffe2df] px-4 py-3 font-bold text-[#8a1717]">{error}</p>}

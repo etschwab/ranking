@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { ensureSchema, getRanking } from '@/db/rankings';
+import { chatGPTSignInPath, getChatGPTUser } from '@/app/chatgpt-auth';
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
@@ -24,16 +25,23 @@ export async function GET(request: Request, { params }: RouteContext) {
 export async function POST(request: Request, { params }: RouteContext) {
   try {
     const { slug } = await params;
+    const user = await getChatGPTUser();
+    if (!user) {
+      return Response.json(
+        { error: 'Bitte melde dich zuerst an.', signInPath: chatGPTSignInPath(`/r/${slug}`) },
+        { status: 401 },
+      );
+    }
     const ranking = await getRanking(slug);
     if (!ranking) return Response.json({ error: 'Ranking nicht gefunden.' }, { status: 404 });
-    const body = await request.json() as { voterName?: unknown; scores?: unknown; editToken?: unknown };
+    const body = await request.json() as { scores?: unknown; editToken?: unknown };
     const scores = body.scores && typeof body.scores === 'object' ? body.scores as Record<string, unknown> : {};
     const itemIds = new Set(ranking.items.map((item) => item.id));
     const entries = Object.entries(scores).filter(([itemId, tier]) => itemIds.has(itemId) && Number.isInteger(tier) && Number(tier) >= 1 && Number(tier) <= 5);
     if (entries.length !== ranking.items.length) return Response.json({ error: 'Bitte ordne jede Option einer Stufe zu.' }, { status: 400 });
     await ensureSchema();
     const db = env.DB;
-    const voterName = typeof body.voterName === 'string' ? body.voterName.trim().slice(0, 50) : '';
+    const voterName = user.displayName.trim().slice(0, 50);
     const requestedToken = typeof body.editToken === 'string' ? body.editToken.trim() : '';
 
     if (requestedToken) {
