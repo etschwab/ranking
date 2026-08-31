@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, BarChart3, Plus, Save, Trash2 } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, BarChart3, Plus, Save, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,6 +14,9 @@ export function RankingEditForm({ ranking }: { ranking: RankingData }) {
   const [description, setDescription] = useState(ranking.description);
   const [items, setItems] = useState<EditItem[]>(ranking.items.map((item) => ({ key: item.id, id: item.id, label: item.label })));
   const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [confirmationTitle, setConfirmationTitle] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
 
   function updateItem(key: string, label: string) {
@@ -54,6 +57,27 @@ export function RankingEditForm({ ranking }: { ranking: RankingData }) {
     }
   }
 
+  async function deleteRanking() {
+    if (confirmationTitle.trim() !== ranking.title) return;
+    setDeleting(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/rankings/${ranking.slug}`, {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ confirmationTitle }),
+      });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? 'Löschen fehlgeschlagen.');
+      localStorage.removeItem(`rankly-ballot-${ranking.slug}`);
+      localStorage.removeItem(`rankly-vote-draft-${ranking.slug}`);
+      window.location.href = '/mine';
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Löschen fehlgeschlagen.');
+      setDeleting(false);
+    }
+  }
+
   return (
     <form onSubmit={submit} className="mt-10 grid gap-7">
       {ranking.ballotCount > 0 && <div className="flex gap-3 rounded-xl border-2 border-[#9a6513] bg-[#fff1a8] p-4 text-sm font-bold text-[#6f4708]"><AlertTriangle className="size-5 shrink-0" /><p>Dieses Ranking hat bereits {ranking.ballotCount} {ranking.ballotCount === 1 ? 'Stimme' : 'Stimmen'}. Gelöschte Optionen verlieren ihre Bewertungen; neue Optionen können bestehende Teilnehmer später ergänzen.</p></div>}
@@ -66,6 +90,11 @@ export function RankingEditForm({ ranking }: { ranking: RankingData }) {
         <div className="flex items-end justify-between gap-4"><div><h2 className="text-2xl font-black">Optionen</h2><p className="mt-1 text-sm font-semibold text-muted-foreground">Umbenennen, sortieren oder neue hinzufügen.</p></div><span className="rounded-full border-2 border-foreground bg-[#d9cffd] px-3 py-1 text-sm font-black">{items.length}/30</span></div>
         <ol className="mt-6 grid gap-3">{items.map((item, index) => <li key={item.key} className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-xl border-2 border-foreground bg-background p-2"><span className="grid size-9 place-items-center rounded-lg bg-muted text-sm font-black">{index + 1}</span><Input required maxLength={80} value={item.label} onChange={(event) => updateItem(item.key, event.target.value)} aria-label={`Option ${index + 1}`} className="h-10 border-0 bg-transparent px-2 font-bold shadow-none focus-visible:ring-0" /><div className="flex"><button type="button" onClick={() => moveItem(index, -1)} disabled={index === 0} className="grid size-9 place-items-center rounded-lg hover:bg-muted disabled:opacity-25" aria-label={`${item.label || `Option ${index + 1}`} nach oben`}><ArrowUp className="size-4" /></button><button type="button" onClick={() => moveItem(index, 1)} disabled={index === items.length - 1} className="grid size-9 place-items-center rounded-lg hover:bg-muted disabled:opacity-25" aria-label={`${item.label || `Option ${index + 1}`} nach unten`}><ArrowDown className="size-4" /></button><button type="button" onClick={() => setItems((current) => current.filter((candidate) => candidate.key !== item.key))} disabled={items.length <= 2} className="grid size-9 place-items-center rounded-lg text-[#9a2820] hover:bg-[#ffe2df] disabled:opacity-25" aria-label={`${item.label || `Option ${index + 1}`} entfernen`}><Trash2 className="size-4" /></button></div></li>)}</ol>
         <Button type="button" variant="outline" onClick={addItem} disabled={items.length >= 30} className="mt-4 h-11 border-2 border-dashed border-foreground font-black"><Plus /> Option hinzufügen</Button>
+      </section>
+
+      <section className="rounded-[1.5rem] border-[3px] border-[#8a1717] bg-[#fff7f5] p-5 shadow-[6px_6px_0_#8a1717] sm:p-7">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div className="flex gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#ffe2df] text-[#8a1717]"><AlertOctagon className="size-6" /></span><div><h2 className="text-xl font-black text-[#8a1717]">Gefahrenzone</h2><p className="mt-1 text-sm font-semibold text-muted-foreground">Das Ranking und alle dazugehörigen Stimmen dauerhaft löschen.</p></div></div>{!deleteOpen && <Button type="button" variant="outline" onClick={() => setDeleteOpen(true)} className="h-11 border-2 border-[#8a1717] font-black text-[#8a1717] hover:bg-[#ffe2df]"><Trash2 /> Ranking löschen</Button>}</div>
+        {deleteOpen && <div className="mt-6 rounded-xl border-2 border-[#8a1717] bg-card p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-black text-[#8a1717]">Diese Aktion kann nicht rückgängig gemacht werden.</p><p className="mt-1 text-sm font-semibold text-muted-foreground">Gib zur Bestätigung den Titel <strong className="text-foreground">{ranking.title}</strong> ein.</p></div><button type="button" onClick={() => { setDeleteOpen(false); setConfirmationTitle(''); }} className="grid size-9 shrink-0 place-items-center rounded-lg hover:bg-muted" aria-label="Löschen abbrechen"><X className="size-4" /></button></div><Input value={confirmationTitle} onChange={(event) => setConfirmationTitle(event.target.value)} className="mt-4 h-11 border-2 border-[#8a1717] px-3 font-bold" placeholder={ranking.title} aria-label="Ranking-Titel zur Löschbestätigung" autoComplete="off" /><div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><Button type="button" variant="ghost" onClick={() => { setDeleteOpen(false); setConfirmationTitle(''); }} disabled={deleting} className="font-black">Abbrechen</Button><Button type="button" onClick={deleteRanking} disabled={deleting || confirmationTitle.trim() !== ranking.title} className="h-11 border-2 border-[#5f1010] bg-[#a31d1d] px-5 font-black text-white shadow-[3px_3px_0_#5f1010] hover:bg-[#8a1717]"><Trash2 /> {deleting ? 'Wird gelöscht…' : 'Endgültig löschen'}</Button></div></div>}
       </section>
 
       {error && <p role="alert" className="rounded-xl border-2 border-[#a31d1d] bg-[#ffe2df] px-4 py-3 font-bold text-[#8a1717]">{error}</p>}

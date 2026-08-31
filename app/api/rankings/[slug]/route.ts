@@ -1,5 +1,5 @@
 import { getChatGPTUser } from '@/app/chatgpt-auth';
-import { getRanking, updateOwnedRanking } from '@/db/rankings';
+import { deleteOwnedRanking, getRanking, updateOwnedRanking } from '@/db/rankings';
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
@@ -39,5 +39,21 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return Response.json({ ok: true, slug });
   } catch {
     return Response.json({ error: 'Das Ranking konnte nicht gespeichert werden.' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request, { params }: RouteContext) {
+  try {
+    const user = await getChatGPTUser();
+    if (!user) return Response.json({ error: 'Bitte melde dich zuerst an.' }, { status: 401 });
+    const { slug } = await params;
+    const body = await request.json() as { confirmationTitle?: unknown };
+    const confirmationTitle = typeof body.confirmationTitle === 'string' ? body.confirmationTitle.trim() : '';
+    const result = await deleteOwnedRanking(slug, user.userId, confirmationTitle);
+    if (result === 'not-owned') return Response.json({ error: 'Du darfst dieses Ranking nicht löschen.' }, { status: 403 });
+    if (result === 'title-mismatch') return Response.json({ error: 'Der eingegebene Titel stimmt nicht überein.' }, { status: 400 });
+    return Response.json({ ok: true });
+  } catch {
+    return Response.json({ error: 'Das Ranking konnte nicht gelöscht werden.' }, { status: 500 });
   }
 }

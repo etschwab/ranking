@@ -115,6 +115,29 @@ export async function updateOwnedRanking(
   return true;
 }
 
+export async function deleteOwnedRanking(slug: string, userId: string, confirmationTitle: string) {
+  await ensureSchema();
+  const db = env.DB;
+  const ranking = await db.prepare(`
+    SELECT r.id, r.title
+    FROM rankings r
+    JOIN ranking_owners o ON o.ranking_id = r.id
+    WHERE r.slug = ? AND o.user_id = ?
+  `).bind(slug, userId).first<{ id: string; title: string }>();
+  if (!ranking) return 'not-owned' as const;
+  if (confirmationTitle !== ranking.title) return 'title-mismatch' as const;
+
+  await db.batch([
+    db.prepare('DELETE FROM scores WHERE ballot_id IN (SELECT id FROM ballots WHERE ranking_id = ?) OR item_id IN (SELECT id FROM items WHERE ranking_id = ?)').bind(ranking.id, ranking.id),
+    db.prepare('DELETE FROM ballot_edit_tokens WHERE ballot_id IN (SELECT id FROM ballots WHERE ranking_id = ?)').bind(ranking.id),
+    db.prepare('DELETE FROM ballots WHERE ranking_id = ?').bind(ranking.id),
+    db.prepare('DELETE FROM items WHERE ranking_id = ?').bind(ranking.id),
+    db.prepare('DELETE FROM ranking_owners WHERE ranking_id = ?').bind(ranking.id),
+    db.prepare('DELETE FROM rankings WHERE id = ?').bind(ranking.id),
+  ]);
+  return 'deleted' as const;
+}
+
 export function createSlug() {
   const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
   const bytes = crypto.getRandomValues(new Uint8Array(8));
