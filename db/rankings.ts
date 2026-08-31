@@ -1,4 +1,4 @@
-import { env } from 'cloudflare:workers';
+import { db } from '@/db/client';
 
 export type RankingItem = { id: string; label: string; position: number; average: number | null; votes: number; distribution: Record<string, number> };
 export type RankingData = { id: string; slug: string; title: string; description: string; createdAt: number; closesAt: number | null; ballotCount: number; items: RankingItem[] };
@@ -10,34 +10,36 @@ let schemaReady = false;
 
 export async function ensureSchema() {
   if (schemaReady) return;
-  const db = env.DB;
   await db.batch([
-    db.prepare('CREATE TABLE IF NOT EXISTS rankings (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT \'\', created_at INTEGER NOT NULL, closes_at INTEGER, access_mode TEXT NOT NULL DEFAULT \'public\', password_hash TEXT, invite_token TEXT, access_token TEXT)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS rankings (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT \'\', created_at BIGINT NOT NULL, closes_at BIGINT, access_mode TEXT NOT NULL DEFAULT \'public\', password_hash TEXT, invite_token TEXT, access_token TEXT)'),
     db.prepare('CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, label TEXT NOT NULL, position INTEGER NOT NULL)'),
-    db.prepare('CREATE TABLE IF NOT EXISTS ballots (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, voter_name TEXT NOT NULL DEFAULT \'\', created_at INTEGER NOT NULL)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS ballots (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, voter_name TEXT NOT NULL DEFAULT \'\', created_at BIGINT NOT NULL)'),
     db.prepare('CREATE TABLE IF NOT EXISTS ballot_edit_tokens (ballot_id TEXT PRIMARY KEY REFERENCES ballots(id) ON DELETE CASCADE, token TEXT NOT NULL UNIQUE)'),
     db.prepare('CREATE TABLE IF NOT EXISTS scores (ballot_id TEXT NOT NULL REFERENCES ballots(id) ON DELETE CASCADE, item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE, tier INTEGER NOT NULL CHECK(tier BETWEEN 1 AND 5), PRIMARY KEY (ballot_id, item_id))'),
     db.prepare('CREATE TABLE IF NOT EXISTS ranking_owners (ranking_id TEXT PRIMARY KEY REFERENCES rankings(id) ON DELETE CASCADE, user_id TEXT NOT NULL, email TEXT NOT NULL)'),
-    db.prepare('CREATE TABLE IF NOT EXISTS user_profiles (user_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, email TEXT NOT NULL, updated_at INTEGER NOT NULL)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS user_profiles (user_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, email TEXT NOT NULL, updated_at BIGINT NOT NULL)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_items_ranking_position ON items(ranking_id, position)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_ballots_ranking_created ON ballots(ranking_id, created_at)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_scores_item ON scores(item_id)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_ranking_owners_user ON ranking_owners(user_id)'),
   ]);
-  const rankingColumns = await db.prepare('PRAGMA table_info(rankings)').all<{ name: string }>();
-  if (!rankingColumns.results.some((column) => column.name === 'closes_at')) {
-    await db.prepare('ALTER TABLE rankings ADD COLUMN closes_at INTEGER').run();
-  }
-  if (!rankingColumns.results.some((column) => column.name === 'access_mode')) await db.prepare("ALTER TABLE rankings ADD COLUMN access_mode TEXT NOT NULL DEFAULT 'public'").run();
-  if (!rankingColumns.results.some((column) => column.name === 'password_hash')) await db.prepare('ALTER TABLE rankings ADD COLUMN password_hash TEXT').run();
-  if (!rankingColumns.results.some((column) => column.name === 'invite_token')) await db.prepare('ALTER TABLE rankings ADD COLUMN invite_token TEXT').run();
-  if (!rankingColumns.results.some((column) => column.name === 'access_token')) await db.prepare('ALTER TABLE rankings ADD COLUMN access_token TEXT').run();
+  await db.batch([
+    db.prepare('ALTER TABLE rankings ADD COLUMN IF NOT EXISTS closes_at BIGINT'),
+    db.prepare("ALTER TABLE rankings ADD COLUMN IF NOT EXISTS access_mode TEXT NOT NULL DEFAULT 'public'"),
+    db.prepare('ALTER TABLE rankings ADD COLUMN IF NOT EXISTS password_hash TEXT'),
+    db.prepare('ALTER TABLE rankings ADD COLUMN IF NOT EXISTS invite_token TEXT'),
+    db.prepare('ALTER TABLE rankings ADD COLUMN IF NOT EXISTS access_token TEXT'),
+    db.prepare('ALTER TABLE rankings ALTER COLUMN created_at TYPE BIGINT'),
+    db.prepare('ALTER TABLE rankings ALTER COLUMN closes_at TYPE BIGINT'),
+    db.prepare('ALTER TABLE ballots ALTER COLUMN created_at TYPE BIGINT'),
+    db.prepare('ALTER TABLE user_profiles ALTER COLUMN updated_at TYPE BIGINT'),
+  ]);
   schemaReady = true;
 }
 
 export async function getRankingsForOwner(userId: string) {
   await ensureSchema();
-  const rows = await env.DB.prepare(`
+  const rows = await db.prepare(`
     SELECT r.slug, r.title, r.description, r.created_at AS createdAt, r.closes_at AS closesAt,
       r.access_mode AS accessMode, r.invite_token AS inviteToken, COUNT(b.id) AS ballotCount
     FROM rankings r
@@ -52,7 +54,6 @@ export async function getRankingsForOwner(userId: string) {
 
 export async function getRanking(slug: string): Promise<RankingData | null> {
   await ensureSchema();
-  const db = env.DB;
   const ranking = await db.prepare('SELECT id, slug, title, description, created_at AS createdAt, closes_at AS closesAt FROM rankings WHERE slug = ?').bind(slug).first<{ id: string; slug: string; title: string; description: string; createdAt: number; closesAt: number | null }>();
   if (!ranking) return null;
   const [itemRows, ballotRow, scoreRows] = await Promise.all([
@@ -81,7 +82,7 @@ export async function getRanking(slug: string): Promise<RankingData | null> {
 
 export async function getOwnedRanking(slug: string, userId: string): Promise<OwnedRankingData | null> {
   await ensureSchema();
-  const owned = await env.DB.prepare(`
+  const owned = await db.prepare(`
     SELECT r.id, r.access_mode AS accessMode, r.password_hash AS passwordHash, r.invite_token AS inviteToken
     FROM rankings r
     JOIN ranking_owners o ON o.ranking_id = r.id
@@ -98,7 +99,6 @@ export async function updateOwnedRanking(
   input: { title: string; description: string; closesAt: number | null; accessMode: RankingAccessMode; passwordHash?: string; items: EditableRankingItem[] },
 ) {
   await ensureSchema();
-  const db = env.DB;
   const ranking = await db.prepare(`
     SELECT r.id, r.access_mode AS accessMode, r.password_hash AS passwordHash, r.invite_token AS inviteToken, r.access_token AS accessToken
     FROM rankings r
@@ -138,7 +138,6 @@ export async function updateOwnedRanking(
 
 export async function deleteOwnedRanking(slug: string, userId: string, confirmationTitle: string) {
   await ensureSchema();
-  const db = env.DB;
   const ranking = await db.prepare(`
     SELECT r.id, r.title
     FROM rankings r

@@ -1,5 +1,5 @@
-import { env } from 'cloudflare:workers';
 import type { ChatGPTUser } from '@/app/chatgpt-auth';
+import { db } from '@/db/client';
 import { ensureSchema } from '@/db/rankings';
 
 export type UserProfile = {
@@ -9,7 +9,7 @@ export type UserProfile = {
 
 export async function getUserProfile(user: ChatGPTUser): Promise<UserProfile> {
   await ensureSchema();
-  const profile = await env.DB.prepare(
+  const profile = await db.prepare(
     'SELECT display_name AS displayName, email FROM user_profiles WHERE user_id = ?',
   ).bind(user.userId).first<UserProfile>();
   return profile ?? { displayName: user.displayName, email: user.email };
@@ -17,7 +17,7 @@ export async function getUserProfile(user: ChatGPTUser): Promise<UserProfile> {
 
 export async function saveUserProfile(user: ChatGPTUser, displayName: string): Promise<UserProfile> {
   await ensureSchema();
-  await env.DB.prepare(`
+  await db.prepare(`
     INSERT INTO user_profiles (user_id, display_name, email, updated_at)
     VALUES (?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET

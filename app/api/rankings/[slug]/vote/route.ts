@@ -1,5 +1,5 @@
-import { env } from 'cloudflare:workers';
 import { ensureSchema, getRanking } from '@/db/rankings';
+import { db } from '@/db/client';
 import { chatGPTSignInPath, getChatGPTUser } from '@/app/chatgpt-auth';
 import { getUserProfile } from '@/db/profiles';
 import { getRankingAccess, hasAccess } from '@/db/ranking-access';
@@ -17,14 +17,14 @@ export async function GET(request: Request, { params }: RouteContext) {
   const ranking = await getRanking(slug);
   if (!ranking) return Response.json({ error: 'Ranking nicht gefunden.' }, { status: 404 });
   await ensureSchema();
-  const ballot = await env.DB.prepare(`
+  const ballot = await db.prepare(`
     SELECT b.id, b.voter_name AS voterName
     FROM ballots b
     JOIN ballot_edit_tokens t ON t.ballot_id = b.id
     WHERE b.ranking_id = ? AND t.token = ?
   `).bind(ranking.id, token).first<{ id: string; voterName: string }>();
   if (!ballot) return Response.json({ error: 'Gespeicherte Abstimmung nicht gefunden.' }, { status: 404 });
-  const rows = await env.DB.prepare('SELECT item_id AS itemId, tier FROM scores WHERE ballot_id = ?').bind(ballot.id).all<{ itemId: string; tier: number }>();
+  const rows = await db.prepare('SELECT item_id AS itemId, tier FROM scores WHERE ballot_id = ?').bind(ballot.id).all<{ itemId: string; tier: number }>();
   return Response.json({ voterName: ballot.voterName, scores: Object.fromEntries(rows.results.map((row) => [row.itemId, Number(row.tier)])) });
 }
 
@@ -52,7 +52,6 @@ export async function POST(request: Request, { params }: RouteContext) {
     const entries = Object.entries(scores).filter(([itemId, tier]) => itemIds.has(itemId) && Number.isInteger(tier) && Number(tier) >= 1 && Number(tier) <= 5);
     if (entries.length !== ranking.items.length) return Response.json({ error: 'Bitte ordne jede Option einer Stufe zu.' }, { status: 400 });
     await ensureSchema();
-    const db = env.DB;
     const profile = await getUserProfile(user);
     const voterName = profile.displayName;
     const requestedToken = typeof body.editToken === 'string' ? body.editToken.trim() : '';

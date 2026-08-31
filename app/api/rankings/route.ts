@@ -1,5 +1,5 @@
-import { env } from 'cloudflare:workers';
 import { createSecret, createSlug, ensureSchema, type RankingAccessMode } from '@/db/rankings';
+import { db } from '@/db/client';
 import { chatGPTSignInPath, getChatGPTUser } from '@/app/chatgpt-auth';
 import { hashPassword } from '@/lib/passwords';
 
@@ -20,7 +20,6 @@ export async function POST(request: Request) {
     if (closesAt !== null && closesAt <= Date.now()) return Response.json({ error: 'Die Abstimmungsfrist muss in der Zukunft liegen.' }, { status: 400 });
     if (accessMode === 'password' && (password.length < 6 || password.length > 100)) return Response.json({ error: 'Das Passwort muss 6 bis 100 Zeichen lang sein.' }, { status: 400 });
     await ensureSchema();
-    const db = env.DB;
     const rankingId = crypto.randomUUID();
     const slug = createSlug();
     const passwordHash = accessMode === 'password' ? await hashPassword(password) : null;
@@ -32,5 +31,8 @@ export async function POST(request: Request) {
       ...labels.map((label, index) => db.prepare('INSERT INTO items (id, ranking_id, label, position) VALUES (?, ?, ?, ?)').bind(crypto.randomUUID(), rankingId, label.slice(0, 80), index)),
     ]);
     return Response.json({ slug }, { status: 201 });
-  } catch { return Response.json({ error: 'Das Ranking konnte gerade nicht erstellt werden.' }, { status: 500 }); }
+  } catch (error) {
+    console.error('Failed to create ranking', error);
+    return Response.json({ error: 'Das Ranking konnte gerade nicht erstellt werden.' }, { status: 500 });
+  }
 }

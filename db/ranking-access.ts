@@ -1,4 +1,4 @@
-import { env } from 'cloudflare:workers';
+import { db } from '@/db/client';
 import { ensureSchema, type RankingAccessMode } from '@/db/rankings';
 
 export type RankingAccess = {
@@ -16,7 +16,7 @@ export function accessCookieName(slug: string) {
 
 export async function getRankingAccess(slug: string, userId?: string): Promise<RankingAccess | null> {
   await ensureSchema();
-  return env.DB.prepare(`
+  return db.prepare(`
     SELECT r.id, r.access_mode AS accessMode, r.password_hash AS passwordHash,
       r.invite_token AS inviteToken, r.access_token AS accessToken,
       CASE WHEN o.user_id = ? THEN 1 ELSE 0 END AS isOwner
