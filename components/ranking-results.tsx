@@ -49,7 +49,7 @@ export function RankingResults({ slug }: { slug: string }) {
   if (!ranking) return <main className="min-h-screen bg-background"><BrandHeader /><div className="mx-auto max-w-3xl px-5 py-24 text-center"><h1 className="text-4xl font-black">Nicht gefunden</h1><p className="mt-3 text-muted-foreground">{error}</p></div></main>;
 
   return (
-    <main className="min-h-screen bg-background pb-24">
+    <main className="rankly-page min-h-screen pb-24">
       <BrandHeader action={<div className="flex items-center gap-2"><a href={`/r/${slug}`} className="hidden h-9 items-center gap-2 rounded-lg px-3 text-sm font-black hover:bg-muted sm:inline-flex"><Pencil className="size-4" /> Meine Stimme</a><Button variant="outline" onClick={copyVoteLink} className="border-2 border-foreground font-black">{copied ? <CheckCircle2 /> : <Share2 />}<span className="hidden sm:inline">{copied ? 'Link kopiert' : 'Abstimmung teilen'}</span></Button></div>} />
       <section className="mx-auto max-w-6xl px-5 pt-8 sm:px-8 sm:pt-12">
         <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">

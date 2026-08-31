@@ -213,7 +213,7 @@ export function RankingVote({ slug }: { slug: string }) {
   );
 
   return (
-    <main className="min-h-screen bg-background pb-28">
+    <main className="rankly-page min-h-screen pb-28">
       <BrandHeader action={<Button variant="outline" className="border-2 border-foreground font-black" onClick={copyLink}>{copied ? <CheckCircle2 /> : <Copy />}<span className="hidden sm:inline">{copied ? 'Link kopiert' : 'Teilen'}</span></Button>} />
       <section className="mx-auto max-w-6xl px-5 pt-8 sm:px-8 sm:pt-12">
         <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">

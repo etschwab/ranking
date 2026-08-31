@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ArrowRight, BarChart3, Check, LogIn, Plus, Share2, Sparkles, Trophy, UserRound } from 'lucide-react';
+import { ArrowRight, BarChart3, Check, Link2, ListChecks, LogIn, Plus, Share2, Sparkles, Trophy, UserRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -49,8 +49,8 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen overflow-hidden bg-background text-foreground">
-      <header className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-8">
+    <main className="rankly-page min-h-screen overflow-x-clip text-foreground">
+      <header className="rankly-header mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6">
         <a href="#" className="flex items-center gap-2.5 font-black tracking-[-0.04em]" aria-label="Rankly Startseite">
           <span className="grid size-9 rotate-3 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[3px_3px_0_var(--ink)]">
             <Trophy className="size-4.5 -rotate-3" />
@@ -59,14 +59,14 @@ export default function Home() {
         </a>
         <nav className="flex items-center gap-2">
           {account?.user ? <>
-            <a href="/mine" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-black hover:bg-muted"><UserRound className="size-4" /> <span className="hidden sm:inline">Meine Rankings</span></a>
-            <a href="/profile" className="hidden rounded-lg px-3 py-2 text-sm font-black hover:bg-muted sm:block">{account.user.displayName}</a>
-            <a href={account.signOutPath} target="_top" className="text-sm font-bold text-muted-foreground hover:text-foreground">Abmelden</a>
+            <a href="/mine" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-black transition hover:bg-muted"><BarChart3 className="size-4" /> <span className="hidden sm:inline">Meine Rankings</span></a>
+            <a href="/profile" className="flex items-center gap-2 rounded-lg bg-[#d9cffd] px-3 py-2 text-sm font-black transition hover:bg-[#cfc1fb]"><UserRound className="size-4" /><span className="hidden md:inline">{account.user.displayName}</span></a>
+            <a href={account.signOutPath} target="_top" className="hidden text-sm font-bold text-muted-foreground hover:text-foreground lg:block">Abmelden</a>
           </> : account ? <a href={account.signInPath} target="_top" className="flex items-center gap-2 rounded-xl border-2 border-foreground bg-card px-3 py-2 text-sm font-black shadow-[2px_2px_0_var(--ink)]"><LogIn className="size-4" /> Anmelden</a> : <a href="#erstellen" className="text-sm font-bold text-muted-foreground">Ranking erstellen</a>}
         </nav>
       </header>
 
-      <section className="mx-auto grid max-w-7xl gap-12 px-5 pb-20 pt-9 lg:grid-cols-[0.84fr_1.16fr] lg:items-center lg:px-8 lg:pb-28 lg:pt-16">
+      <section className="mx-auto grid max-w-7xl gap-14 px-5 pb-16 pt-16 lg:grid-cols-[0.84fr_1.16fr] lg:items-center lg:px-8 lg:pb-24 lg:pt-24">
         <div className="relative z-10 max-w-xl">
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border-2 border-foreground bg-[#fff1a8] px-3 py-1.5 text-xs font-black uppercase tracking-[0.13em] shadow-[2px_2px_0_var(--ink)]">
             <Sparkles className="size-3.5" /> Gemeinsam entscheiden
@@ -77,7 +77,7 @@ export default function Home() {
           <p className="mt-7 max-w-lg text-lg font-medium leading-relaxed text-muted-foreground sm:text-xl">
             Erstelle ein Tier-Ranking, teile den Link mit deiner Gruppe und sieh sofort, was wirklich auf Platz S gehört.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
+          <div className="mt-8 flex flex-wrap items-center gap-3">
             <Button size="lg" className="h-12 rounded-xl border-2 border-foreground px-5 text-base font-black shadow-[4px_4px_0_var(--ink)] hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[2px_2px_0_var(--ink)]" onClick={() => document.querySelector('#erstellen')?.scrollIntoView({ behavior: 'smooth' })}>
               <Plus className="size-5" /> Ranking starten
             </Button>
@@ -86,8 +86,8 @@ export default function Home() {
         </div>
 
         <div className="relative mx-auto w-full max-w-2xl lg:rotate-1">
-          <div className="absolute -inset-5 -z-10 rotate-2 rounded-[2.5rem] bg-[#d9cffd]" />
-          <div className="rounded-[1.75rem] border-[3px] border-foreground bg-card p-3 shadow-[10px_10px_0_var(--ink)] sm:p-5">
+          <div className="absolute -inset-5 -z-10 rotate-2 rounded-[2.5rem] border-2 border-foreground bg-[#d9cffd]" />
+          <div className="rankly-card rounded-[1.75rem] border-[3px] border-foreground bg-card p-3 shadow-[10px_10px_0_var(--ink)] sm:p-5">
             <div className="mb-4 flex items-center justify-between px-1">
               <div><p className="text-xs font-black uppercase tracking-[0.15em] text-muted-foreground">Live-Vorschau</p><h2 className="text-xl font-black tracking-tight">Die besten Filme aller Zeiten</h2></div>
               <Share2 className="size-5" />
@@ -106,7 +106,11 @@ export default function Home() {
         </div>
       </section>
 
-      <section id="erstellen" className="border-y-2 border-foreground bg-[#fff5e7] px-5 py-20 sm:px-8">
+      <section className="mx-auto grid max-w-6xl gap-4 px-5 pb-20 sm:grid-cols-3 sm:px-8">
+        {[{ icon: ListChecks, step: '01', title: 'Optionen sammeln', text: 'Thema eintragen und alles hinzufügen, was zur Wahl steht.', color: '#fff1a8' }, { icon: Link2, step: '02', title: 'Link verschicken', text: 'Alle stimmen mit ihrem eigenen Namen und Profil ab.', color: '#d9cffd' }, { icon: BarChart3, step: '03', title: 'Favoriten sehen', text: 'Die gemeinsame Rangliste entsteht direkt aus allen Stimmen.', color: '#bcefd2' }].map((item) => <article key={item.step} className="rankly-card rounded-[1.35rem] border-2 border-foreground bg-card p-5 shadow-[4px_4px_0_var(--ink)]"><div className="flex items-center justify-between"><span className="grid size-11 place-items-center rounded-xl border-2 border-foreground" style={{ background: item.color }}><item.icon className="size-5" /></span><span className="text-sm font-black text-muted-foreground">{item.step}</span></div><h2 className="mt-5 text-xl font-black">{item.title}</h2><p className="mt-2 text-sm font-semibold leading-relaxed text-muted-foreground">{item.text}</p></article>)}
+      </section>
+
+      <section id="erstellen" className="border-y-[3px] border-foreground bg-[#fff5e7]/95 px-5 py-20 sm:px-8 lg:py-24">
         <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.7fr_1.3fr]">
           <div>
             <span className="mb-4 grid size-12 place-items-center rounded-2xl border-2 border-foreground bg-[#ff8b72] shadow-[3px_3px_0_var(--ink)]"><BarChart3 className="size-6" /></span>
@@ -115,9 +119,9 @@ export default function Home() {
             <p className="mt-4 max-w-md font-medium leading-relaxed text-muted-foreground">Thema und Auswahl eintragen. Danach erhältst du direkt den Link zum Teilen.</p>
           </div>
           <form className="grid gap-5 rounded-[1.5rem] border-[3px] border-foreground bg-card p-5 shadow-[8px_8px_0_var(--ink)] sm:p-7" onSubmit={createRanking}>
-            <label className="grid gap-2 text-sm font-black">Titel<Input required maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} className="h-12 rounded-xl border-2 border-foreground px-4 text-base font-bold" placeholder="z. B. Unser nächstes Reiseziel" /></label>
-            <label className="grid gap-2 text-sm font-black">Kurze Beschreibung <Input maxLength={280} value={description} onChange={(event) => setDescription(event.target.value)} className="h-12 rounded-xl border-2 border-foreground px-4 text-base" placeholder="Optional: Worum geht es?" /></label>
-            <label className="grid gap-2 text-sm font-black">Optionen <Textarea required className="min-h-36 rounded-xl border-2 border-foreground px-4 py-3 text-base leading-relaxed" value={options} onChange={(event) => setOptions(event.target.value)} /></label>
+            <label className="grid gap-2 text-sm font-black" htmlFor="ranking-title"><span className="flex items-center gap-2"><span className="grid size-6 place-items-center rounded-full bg-foreground text-xs text-background">1</span>Titel</span><Input id="ranking-title" required maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} className="h-12 rounded-xl border-2 border-foreground px-4 text-base font-bold" placeholder="z. B. Unser nächstes Reiseziel" /></label>
+            <label className="grid gap-2 text-sm font-black" htmlFor="ranking-description"><span className="flex items-center gap-2"><span className="grid size-6 place-items-center rounded-full bg-foreground text-xs text-background">2</span>Beschreibung <span className="font-semibold text-muted-foreground">(optional)</span></span><Input id="ranking-description" maxLength={280} value={description} onChange={(event) => setDescription(event.target.value)} className="h-12 rounded-xl border-2 border-foreground px-4 text-base" placeholder="Worum geht es?" /></label>
+            <label className="grid gap-2 text-sm font-black" htmlFor="ranking-options"><span className="flex items-center gap-2"><span className="grid size-6 place-items-center rounded-full bg-foreground text-xs text-background">3</span>Optionen</span><Textarea id="ranking-options" required className="min-h-40 rounded-xl border-2 border-foreground px-4 py-3 text-base leading-relaxed" value={options} onChange={(event) => setOptions(event.target.value)} /></label>
             {error && <p role="alert" className="rounded-xl border-2 border-[#a31d1d] bg-[#ffe2df] px-4 py-3 text-sm font-bold text-[#8a1717]">{error}</p>}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm font-semibold text-muted-foreground">Eine Option pro Zeile · mindestens 2</p>

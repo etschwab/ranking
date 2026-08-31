@@ -12,7 +12,7 @@ export default async function MyRankingsPage() {
   const profile = await getUserProfile(user);
   const rankings = await getRankingsForOwner(user.userId);
   return (
-    <main className="min-h-screen bg-background pb-24">
+    <main className="rankly-page min-h-screen pb-24">
       <BrandHeader action={<div className="flex items-center gap-3"><a href="/profile" className="flex items-center gap-2 text-sm font-black"><UserRound className="size-4" /><span className="hidden sm:inline">{profile.displayName}</span></a><a href={chatGPTSignOutPath('/')} target="_top" className="flex items-center gap-2 text-sm font-black"><LogOut className="size-4" /> Abmelden</a></div>} />
       <section className="mx-auto max-w-6xl px-5 pt-10 sm:px-8">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
@@ -21,7 +21,7 @@ export default async function MyRankingsPage() {
         </div>
 
         {rankings.length === 0 ? <div className="mt-12 rounded-[1.75rem] border-[3px] border-foreground bg-card p-10 text-center shadow-[7px_7px_0_var(--ink)]"><h2 className="text-3xl font-black">Noch nichts gerankt</h2><p className="mt-2 font-medium text-muted-foreground">Erstelle dein erstes Ranking und teile es mit deiner Gruppe.</p></div> :
-          <div className="mt-12 grid gap-5 md:grid-cols-2">{rankings.map((ranking) => <article key={ranking.slug} className="rounded-[1.5rem] border-[3px] border-foreground bg-card p-5 shadow-[6px_6px_0_var(--ink)] sm:p-6"><div className="flex items-start justify-between gap-3"><div><h2 className="text-2xl font-black tracking-tight">{ranking.title}</h2>{ranking.description && <p className="mt-2 line-clamp-2 font-medium text-muted-foreground">{ranking.description}</p>}</div><span className="flex shrink-0 items-center gap-1.5 rounded-full border-2 border-foreground bg-[#fff1a8] px-3 py-1 text-sm font-black"><Users className="size-4" /> {ranking.ballotCount}</span></div><div className="mt-6 flex flex-wrap gap-2"><a href={`/r/${ranking.slug}/results`} className="inline-flex h-8 items-center gap-2 rounded-lg border border-transparent bg-primary px-2.5 text-sm font-black text-primary-foreground"><BarChart3 className="size-4" /> Auswertung</a><CopyLinkButton path={`/r/${ranking.slug}`} /></div></article>)}</div>}
+          <div className="mt-12 grid gap-5 md:grid-cols-2">{rankings.map((ranking, index) => <article key={ranking.slug} className="rankly-card overflow-hidden rounded-[1.5rem] border-[3px] border-foreground bg-card shadow-[6px_6px_0_var(--ink)]"><div className="h-3 border-b-2 border-foreground" style={{ background: ['var(--tier-s)', 'var(--tier-a)', 'var(--tier-c)', '#d9cffd'][index % 4] }} /><div className="p-5 sm:p-6"><div className="flex items-start justify-between gap-3"><div><h2 className="text-2xl font-black tracking-tight">{ranking.title}</h2>{ranking.description && <p className="mt-2 line-clamp-2 font-medium text-muted-foreground">{ranking.description}</p>}</div><span className="flex shrink-0 items-center gap-1.5 rounded-full border-2 border-foreground bg-[#fff1a8] px-3 py-1 text-sm font-black"><Users className="size-4" /> {ranking.ballotCount}</span></div><div className="mt-6 flex flex-wrap gap-2"><a href={`/r/${ranking.slug}/results`} className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-sm font-black text-primary-foreground"><BarChart3 className="size-4" /> Auswertung</a><CopyLinkButton path={`/r/${ranking.slug}`} /></div></div></article>)}</div>}
       </section>
     </main>
   );
