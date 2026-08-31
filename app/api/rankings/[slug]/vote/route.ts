@@ -35,6 +35,9 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
     const ranking = await getRanking(slug);
     if (!ranking) return Response.json({ error: 'Ranking nicht gefunden.' }, { status: 404 });
+    if (ranking.closesAt !== null && Date.now() >= ranking.closesAt) {
+      return Response.json({ error: 'Diese Abstimmung ist bereits geschlossen.' }, { status: 409 });
+    }
     const body = await request.json() as { scores?: unknown; editToken?: unknown };
     const scores = body.scores && typeof body.scores === 'object' ? body.scores as Record<string, unknown> : {};
     const itemIds = new Set(ranking.items.map((item) => item.id));

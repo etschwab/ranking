@@ -17,7 +17,7 @@ import {
   type DragStartEvent,
   type CollisionDetection,
 } from '@dnd-kit/core';
-import { ArrowDownToLine, BarChart3, CheckCircle2, Cloud, Copy, GripVertical, Info, LogIn, Pencil, RotateCcw, Send, Share2, Undo2, UserRound, Users, X } from 'lucide-react';
+import { ArrowDownToLine, BarChart3, CheckCircle2, Clock3, Cloud, Copy, GripVertical, Info, LockKeyhole, LogIn, Pencil, RotateCcw, Send, Share2, Undo2, UserRound, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BrandHeader } from '@/components/brand-header';
 import type { RankingData, RankingItem } from '@/db/rankings';
@@ -89,6 +89,7 @@ export function RankingVote({ slug }: { slug: string }) {
   const [copied, setCopied] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [liveMessage, setLiveMessage] = useState('');
+  const [now, setNow] = useState(Date.now());
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor));
   const collisionDetection = useCallback<CollisionDetection>((args) => {
     const pointerCollisions = pointerWithin(args);
@@ -144,10 +145,17 @@ export function RankingVote({ slug }: { slug: string }) {
     else localStorage.removeItem(`rankly-vote-draft-${slug}`);
   }, [scores, slug, voteReady]);
 
+  useEffect(() => {
+    if (!ranking?.closesAt || ranking.closesAt <= now) return;
+    const timer = window.setTimeout(() => setNow(Date.now()), Math.min(ranking.closesAt - Date.now() + 100, 2_147_000_000));
+    return () => window.clearTimeout(timer);
+  }, [now, ranking?.closesAt]);
+
   const assigned = Object.keys(scores).length;
   const complete = ranking ? assigned === ranking.items.length : false;
   const grouped = useMemo(() => new Map(tiers.map((tier) => [tier.score, ranking?.items.filter((item) => scores[item.id] === tier.score) ?? []])), [ranking, scores]);
   const activeItem = ranking?.items.find((item) => item.id === activeId);
+  const closed = ranking?.closesAt !== null && ranking?.closesAt !== undefined && now >= ranking.closesAt;
 
   function remember(current: Record<string, number>) {
     setScoreHistory((history) => [...history.slice(-19), current]);
@@ -230,6 +238,18 @@ export function RankingVote({ slug }: { slug: string }) {
   if (loading) return <main className="min-h-screen bg-background"><BrandHeader /><div className="mx-auto max-w-3xl px-5 py-24 text-center"><p className="font-black">Ranking wird geladen…</p></div></main>;
   if (!ranking) return <main className="min-h-screen bg-background"><BrandHeader /><div className="mx-auto max-w-3xl px-5 py-24 text-center"><h1 className="text-4xl font-black">Nicht gefunden</h1><p className="mt-3 text-muted-foreground">{error}</p><a href="/" className="mt-6 inline-block font-black text-primary underline">Eigenes Ranking erstellen</a></div></main>;
 
+  if (closed) return (
+    <main className="rankly-page min-h-screen"><BrandHeader />
+      <section className="mx-auto flex max-w-2xl flex-col items-center px-5 py-20 text-center">
+        <span className="grid size-20 place-items-center rounded-[1.7rem] border-[3px] border-foreground bg-[#fff1a8] shadow-[6px_6px_0_var(--ink)]"><LockKeyhole className="size-10" /></span>
+        <p className="mt-8 text-sm font-black uppercase tracking-[0.15em] text-primary">Abstimmung beendet</p>
+        <h1 className="mt-2 text-5xl font-black tracking-[-0.055em]">Die Frist ist abgelaufen.</h1>
+        <p className="mt-4 max-w-lg text-lg font-medium text-muted-foreground">Für „{ranking.title}“ können keine Stimmen mehr abgegeben oder geändert werden.</p>
+        <a href={`/r/${slug}/results`} className="mt-8 inline-flex h-12 items-center gap-2 rounded-xl border-2 border-foreground bg-primary px-6 text-base font-black text-primary-foreground shadow-[3px_3px_0_var(--ink)]"><BarChart3 className="size-5" /> Ergebnis ansehen</a>
+      </section>
+    </main>
+  );
+
   if (account && !account.user) return (
     <main className="min-h-screen bg-background"><BrandHeader />
       <section className="mx-auto flex max-w-2xl flex-col items-center px-5 py-20 text-center">
@@ -260,7 +280,7 @@ export function RankingVote({ slug }: { slug: string }) {
       <section className="mx-auto max-w-6xl px-5 pt-8 sm:px-8 sm:pt-12">
         <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
           <div><p className="text-sm font-black uppercase tracking-[0.15em] text-primary">Deine Abstimmung</p><h1 className="mt-2 max-w-3xl text-4xl font-black tracking-[-0.05em] sm:text-6xl">{ranking.title}</h1>{ranking.description && <p className="mt-4 max-w-2xl text-lg font-medium text-muted-foreground">{ranking.description}</p>}</div>
-          <div className="flex items-center gap-2 font-black text-muted-foreground"><Users className="size-5" /> {ranking.ballotCount} {ranking.ballotCount === 1 ? 'Stimme' : 'Stimmen'}</div>
+          <div className="flex flex-col items-start gap-2 md:items-end"><div className="flex items-center gap-2 font-black text-muted-foreground"><Users className="size-5" /> {ranking.ballotCount} {ranking.ballotCount === 1 ? 'Stimme' : 'Stimmen'}</div>{ranking.closesAt && <div className="flex items-center gap-2 rounded-full border-2 border-foreground bg-[#fff1a8] px-3 py-1.5 text-sm font-black"><Clock3 className="size-4" /> Offen bis {new Date(ranking.closesAt).toLocaleString('de-CH', { dateStyle: 'medium', timeStyle: 'short' })}</div>}</div>
         </div>
         {hasSavedVote && <div className="mt-7 flex items-center gap-2 rounded-xl border-2 border-[#18713b] bg-[#d9f7e4] px-4 py-3 font-bold text-[#125a2f]"><Pencil className="size-5" /> Deine gespeicherte Abstimmung ist geladen und kann geändert werden.</div>}
         {restoredDraft && !hasSavedVote && <div className="mt-7 flex items-center gap-2 rounded-xl border-2 border-primary bg-[#e9e4ff] px-4 py-3 font-bold text-primary"><Cloud className="size-5" /> Dein letzter Entwurf wurde auf diesem Gerät wiederhergestellt.</div>}

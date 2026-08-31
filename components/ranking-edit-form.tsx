@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertOctagon, AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, BarChart3, Plus, Save, Trash2, X } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, BarChart3, Clock3, Plus, Save, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,9 +9,17 @@ import type { RankingData } from '@/db/rankings';
 
 type EditItem = { key: string; id?: string; label: string };
 
+function toDateTimeLocal(timestamp: number | null) {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 export function RankingEditForm({ ranking }: { ranking: RankingData }) {
   const [title, setTitle] = useState(ranking.title);
   const [description, setDescription] = useState(ranking.description);
+  const [closesAt, setClosesAt] = useState(toDateTimeLocal(ranking.closesAt));
   const [items, setItems] = useState<EditItem[]>(ranking.items.map((item) => ({ key: item.id, id: item.id, label: item.label })));
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -46,7 +54,7 @@ export function RankingEditForm({ ranking }: { ranking: RankingData }) {
       const response = await fetch(`/api/rankings/${ranking.slug}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title, description, items: items.map(({ id, label }) => ({ id, label })) }),
+        body: JSON.stringify({ title, description, closesAt: closesAt ? new Date(closesAt).getTime() : null, items: items.map(({ id, label }) => ({ id, label })) }),
       });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error ?? 'Speichern fehlgeschlagen.');
@@ -84,6 +92,7 @@ export function RankingEditForm({ ranking }: { ranking: RankingData }) {
       <section className="grid gap-5 rounded-[1.5rem] border-[3px] border-foreground bg-card p-5 shadow-[7px_7px_0_var(--ink)] sm:p-7">
         <label className="grid gap-2 text-sm font-black" htmlFor="edit-title">Titel<Input id="edit-title" required minLength={3} maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} className="h-12 border-2 border-foreground px-4 text-base font-bold" /></label>
         <label className="grid gap-2 text-sm font-black" htmlFor="edit-description">Beschreibung <span className="font-semibold text-muted-foreground">(optional)</span><Textarea id="edit-description" maxLength={280} value={description} onChange={(event) => setDescription(event.target.value)} className="min-h-24 border-2 border-foreground px-4 py-3 text-base" /></label>
+        <label className="grid gap-2 text-sm font-black" htmlFor="edit-deadline">Abstimmungsfrist <span className="font-semibold text-muted-foreground">(optional)</span><span className="relative"><Clock3 className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" /><Input id="edit-deadline" type="datetime-local" value={closesAt} onChange={(event) => setClosesAt(event.target.value)} className="h-12 border-2 border-foreground pl-12 font-bold" /></span><span className="font-semibold text-muted-foreground">Leeren, um die Abstimmung wieder ohne Frist zu öffnen.</span></label>
       </section>
 
       <section className="rounded-[1.5rem] border-[3px] border-foreground bg-card p-5 shadow-[7px_7px_0_var(--ink)] sm:p-7">

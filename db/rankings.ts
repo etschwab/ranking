@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 
 export type RankingItem = { id: string; label: string; position: number; average: number | null; votes: number; distribution: Record<string, number> };
-export type RankingData = { id: string; slug: string; title: string; description: string; createdAt: number; ballotCount: number; items: RankingItem[] };
+export type RankingData = { id: string; slug: string; title: string; description: string; createdAt: number; closesAt: number | null; ballotCount: number; items: RankingItem[] };
 export type EditableRankingItem = { id?: string; label: string };
 
 let schemaReady = false;
@@ -10,7 +10,7 @@ export async function ensureSchema() {
   if (schemaReady) return;
   const db = env.DB;
   await db.batch([
-    db.prepare('CREATE TABLE IF NOT EXISTS rankings (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT \'\', created_at INTEGER NOT NULL)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS rankings (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT \'\', created_at INTEGER NOT NULL, closes_at INTEGER)'),
     db.prepare('CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, label TEXT NOT NULL, position INTEGER NOT NULL)'),
     db.prepare('CREATE TABLE IF NOT EXISTS ballots (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, voter_name TEXT NOT NULL DEFAULT \'\', created_at INTEGER NOT NULL)'),
     db.prepare('CREATE TABLE IF NOT EXISTS ballot_edit_tokens (ballot_id TEXT PRIMARY KEY REFERENCES ballots(id) ON DELETE CASCADE, token TEXT NOT NULL UNIQUE)'),
@@ -22,27 +22,31 @@ export async function ensureSchema() {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_scores_item ON scores(item_id)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_ranking_owners_user ON ranking_owners(user_id)'),
   ]);
+  const rankingColumns = await db.prepare('PRAGMA table_info(rankings)').all<{ name: string }>();
+  if (!rankingColumns.results.some((column) => column.name === 'closes_at')) {
+    await db.prepare('ALTER TABLE rankings ADD COLUMN closes_at INTEGER').run();
+  }
   schemaReady = true;
 }
 
 export async function getRankingsForOwner(userId: string) {
   await ensureSchema();
   const rows = await env.DB.prepare(`
-    SELECT r.slug, r.title, r.description, r.created_at AS createdAt, COUNT(b.id) AS ballotCount
+    SELECT r.slug, r.title, r.description, r.created_at AS createdAt, r.closes_at AS closesAt, COUNT(b.id) AS ballotCount
     FROM rankings r
     JOIN ranking_owners o ON o.ranking_id = r.id
     LEFT JOIN ballots b ON b.ranking_id = r.id
     WHERE o.user_id = ?
     GROUP BY r.id
     ORDER BY r.created_at DESC
-  `).bind(userId).all<{ slug: string; title: string; description: string; createdAt: number; ballotCount: number }>();
-  return rows.results.map((row) => ({ ...row, ballotCount: Number(row.ballotCount) }));
+  `).bind(userId).all<{ slug: string; title: string; description: string; createdAt: number; closesAt: number | null; ballotCount: number }>();
+  return rows.results.map((row) => ({ ...row, closesAt: row.closesAt === null ? null : Number(row.closesAt), ballotCount: Number(row.ballotCount) }));
 }
 
 export async function getRanking(slug: string): Promise<RankingData | null> {
   await ensureSchema();
   const db = env.DB;
-  const ranking = await db.prepare('SELECT id, slug, title, description, created_at AS createdAt FROM rankings WHERE slug = ?').bind(slug).first<{ id: string; slug: string; title: string; description: string; createdAt: number }>();
+  const ranking = await db.prepare('SELECT id, slug, title, description, created_at AS createdAt, closes_at AS closesAt FROM rankings WHERE slug = ?').bind(slug).first<{ id: string; slug: string; title: string; description: string; createdAt: number; closesAt: number | null }>();
   if (!ranking) return null;
   const [itemRows, ballotRow, scoreRows] = await Promise.all([
     db.prepare('SELECT id, label, position FROM items WHERE ranking_id = ? ORDER BY position').bind(ranking.id).all<{ id: string; label: string; position: number }>(),
@@ -59,6 +63,7 @@ export async function getRanking(slug: string): Promise<RankingData | null> {
   }
   return {
     ...ranking,
+    closesAt: ranking.closesAt === null ? null : Number(ranking.closesAt),
     ballotCount: Number(ballotRow?.count ?? 0),
     items: itemRows.results.map((item) => {
       const result = grouped.get(item.id);
@@ -81,7 +86,7 @@ export async function getOwnedRanking(slug: string, userId: string): Promise<Ran
 export async function updateOwnedRanking(
   slug: string,
   userId: string,
-  input: { title: string; description: string; items: EditableRankingItem[] },
+  input: { title: string; description: string; closesAt: number | null; items: EditableRankingItem[] },
 ) {
   await ensureSchema();
   const db = env.DB;
@@ -105,7 +110,7 @@ export async function updateOwnedRanking(
     : db.prepare('DELETE FROM items WHERE ranking_id = ?').bind(ranking.id);
 
   await db.batch([
-    db.prepare('UPDATE rankings SET title = ?, description = ? WHERE id = ?').bind(input.title, input.description, ranking.id),
+    db.prepare('UPDATE rankings SET title = ?, description = ?, closes_at = ? WHERE id = ?').bind(input.title, input.description, input.closesAt, ranking.id),
     deleteScores,
     deleteItems,
     ...input.items.map((item, position) => item.id && existingIds.has(item.id)

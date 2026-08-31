@@ -6,6 +6,7 @@ export const rankings = sqliteTable('rankings', {
   title: text('title').notNull(),
   description: text('description').notNull().default(''),
   createdAt: integer('created_at').notNull(),
+  closesAt: integer('closes_at'),
 });
 
 export const userProfiles = sqliteTable('user_profiles', {
