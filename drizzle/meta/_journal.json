@@ -57,6 +57,13 @@
       "when": 1788283648811,
       "tag": "0007_good_whiplash",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788285988995,
+      "tag": "0008_damp_slapstick",
+      "breakpoints": true
     }
   ]
 }

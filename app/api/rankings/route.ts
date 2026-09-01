@@ -1,4 +1,4 @@
-import { createSecret, createSlug, ensureSchema, type RankingAccessMode } from '@/db/rankings';
+import { createSecret, createSlug, defaultTiers, ensureSchema, type RankingAccessMode } from '@/db/rankings';
 import { db } from '@/db/client';
 import { chatGPTSignInPath, getChatGPTUser } from '@/app/chatgpt-auth';
 import { hashPassword } from '@/lib/passwords';
@@ -28,6 +28,7 @@ export async function POST(request: Request) {
     await db.batch([
       db.prepare('INSERT INTO rankings (id, slug, title, description, created_at, closes_at, access_mode, password_hash, invite_token, access_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(rankingId, slug, title, description, Date.now(), closesAt, accessMode, passwordHash, inviteToken, accessToken),
       db.prepare('INSERT INTO ranking_owners (ranking_id, user_id, email) VALUES (?, ?, ?)').bind(rankingId, user.userId, user.email),
+      ...defaultTiers.map((tier, position) => db.prepare('INSERT INTO ranking_tiers (id, ranking_id, label, color, position) VALUES (?, ?, ?, ?, ?)').bind(crypto.randomUUID(), rankingId, tier.label, tier.color, position)),
       ...labels.map((label, index) => db.prepare('INSERT INTO items (id, ranking_id, label, position) VALUES (?, ?, ?, ?)').bind(crypto.randomUUID(), rankingId, label.slice(0, 80), index)),
     ]);
     return Response.json({ slug }, { status: 201 });

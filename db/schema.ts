@@ -14,6 +14,14 @@ export const rankings = sqliteTable('rankings', {
   accessToken: text('access_token'),
 });
 
+export const rankingTiers = sqliteTable('ranking_tiers', {
+  id: text('id').primaryKey(),
+  rankingId: text('ranking_id').notNull().references(() => rankings.id, { onDelete: 'cascade' }),
+  label: text('label').notNull(),
+  color: text('color').notNull(),
+  position: integer('position').notNull(),
+}, (table) => [index('idx_ranking_tiers_position').on(table.rankingId, table.position)]);
+
 export const userProfiles = sqliteTable('user_profiles', {
   userId: text('user_id').primaryKey(),
   displayName: text('display_name').notNull(),
@@ -31,6 +39,7 @@ export const items = sqliteTable('items', {
   id: text('id').primaryKey(),
   rankingId: text('ranking_id').notNull().references(() => rankings.id, { onDelete: 'cascade' }),
   label: text('label').notNull(),
+  imageData: text('image_data'),
   position: integer('position').notNull(),
 }, (table) => [index('idx_items_ranking_position').on(table.rankingId, table.position)]);
 
@@ -50,4 +59,5 @@ export const scores = sqliteTable('scores', {
   ballotId: text('ballot_id').notNull().references(() => ballots.id, { onDelete: 'cascade' }),
   itemId: text('item_id').notNull().references(() => items.id, { onDelete: 'cascade' }),
   tier: integer('tier').notNull(),
+  rankPosition: integer('rank_position').notNull().default(0),
 }, (table) => [primaryKey({ columns: [table.ballotId, table.itemId] }), index('idx_scores_item').on(table.itemId)]);

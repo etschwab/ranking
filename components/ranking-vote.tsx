@@ -1,4 +1,5 @@
 'use client';
+/* oxlint-disable next/no-img-element -- option thumbnails are pre-compressed data URLs */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -17,22 +18,14 @@ import {
   type DragStartEvent,
   type CollisionDetection,
 } from '@dnd-kit/core';
-import { ArrowDownToLine, BarChart3, CheckCircle2, Clock3, Cloud, Copy, GripVertical, Info, LockKeyhole, LogIn, Pencil, RotateCcw, Send, Share2, Undo2, UserRound, Users, X } from 'lucide-react';
+import { ArrowDown, ArrowDownToLine, ArrowUp, BarChart3, CheckCircle2, Clock3, Cloud, Copy, GripVertical, Info, LockKeyhole, LogIn, Pencil, RotateCcw, Send, Share2, Undo2, UserRound, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BrandHeader } from '@/components/brand-header';
 import { RankingAccessGate } from '@/components/ranking-access-gate';
 import { RankingSocial } from '@/components/ranking-social';
-import type { RankingAccessMode, RankingData, RankingItem } from '@/db/rankings';
+import type { RankingAccessMode, RankingData, RankingItem, RankingTier } from '@/db/rankings';
 
-const tiers = [
-  { label: 'S', score: 5, color: 'var(--tier-s)', helper: 'Spitzenklasse' },
-  { label: 'A', score: 4, color: 'var(--tier-a)', helper: 'Sehr stark' },
-  { label: 'B', score: 3, color: 'var(--tier-b)', helper: 'Solide' },
-  { label: 'C', score: 2, color: 'var(--tier-c)', helper: 'Eher nicht' },
-  { label: 'D', score: 1, color: 'var(--tier-d)', helper: 'Schlusslicht' },
-];
-
-function DraggableChip({ item, onUnassign }: { item: RankingItem; onUnassign: () => void }) {
+function DraggableChip({ item, onUnassign, onMove, canMoveUp, canMoveDown }: { item: RankingItem; onUnassign: () => void; onMove: (direction: -1 | 1) => void; canMoveUp: boolean; canMoveDown: boolean }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: item.id });
   return (
     <div
@@ -40,32 +33,35 @@ function DraggableChip({ item, onUnassign }: { item: RankingItem; onUnassign: ()
       className="flex items-center overflow-hidden rounded-xl border-2 border-foreground bg-background text-sm font-black shadow-[2px_2px_0_var(--ink)] transition focus-within:ring-4 focus-within:ring-primary/25 hover:-translate-y-0.5"
       style={{ transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined, opacity: isDragging ? 0.25 : 1 }}
     >
+      {item.imageData && <img src={item.imageData} alt="" className="ml-2 size-9 rounded-lg border border-foreground object-cover" />}
       <button {...listeners} {...attributes} className="flex touch-none cursor-grab items-center gap-1.5 px-3 py-2.5 text-left active:cursor-grabbing" aria-label={`${item.label} in eine andere Stufe ziehen`}><GripVertical className="size-3.5 opacity-50" />{item.label}</button>
+      <button onClick={() => onMove(-1)} disabled={!canMoveUp} className="grid self-stretch place-items-center border-l-2 border-foreground px-2 hover:bg-muted disabled:opacity-20" aria-label={`${item.label} innerhalb der Stufe nach oben`}><ArrowUp className="size-3.5" /></button>
+      <button onClick={() => onMove(1)} disabled={!canMoveDown} className="grid self-stretch place-items-center border-l-2 border-foreground px-2 hover:bg-muted disabled:opacity-20" aria-label={`${item.label} innerhalb der Stufe nach unten`}><ArrowDown className="size-3.5" /></button>
       <button onClick={onUnassign} className="grid self-stretch place-items-center border-l-2 border-foreground px-2 text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label={`${item.label} zurück zu Noch einordnen`} title="Zurück zu Noch einordnen"><X className="size-3.5" /></button>
     </div>
   );
 }
 
-function TierRow({ tier, items, last, unassign, dragging }: { tier: (typeof tiers)[number]; items: RankingItem[]; last: boolean; unassign: (id: string) => void; dragging: boolean }) {
+function TierRow({ tier, items, last, unassign, move, dragging }: { tier: RankingTier; items: RankingItem[]; last: boolean; unassign: (id: string) => void; move: (id: string, direction: -1 | 1) => void; dragging: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: `tier-${tier.score}` });
   return (
     <div ref={setNodeRef} className={`relative grid min-h-24 grid-cols-[72px_1fr] transition-all sm:grid-cols-[112px_1fr] ${!last ? 'border-b-[3px] border-foreground' : ''} ${isOver ? 'z-10 bg-[#e9e4ff] ring-4 ring-inset ring-primary' : dragging ? 'bg-primary/[0.035]' : ''}`}>
-      <div className="grid place-items-center border-r-[3px] border-foreground" style={{ background: tier.color }}><span className="text-3xl font-black sm:text-4xl">{tier.label}</span><span className="hidden text-[10px] font-black uppercase tracking-wider opacity-65 sm:block">{tier.helper}</span></div>
+      <div className="grid place-items-center border-r-[3px] border-foreground px-2 text-center" style={{ background: tier.color }}><span className="break-words text-xl font-black sm:text-2xl">{tier.label}</span></div>
       <div className="flex flex-wrap content-center items-center gap-2.5 p-3 sm:p-4">
-        {items.map((item) => <DraggableChip key={item.id} item={item} onUnassign={() => unassign(item.id)} />)}
-        {!items.length && <span className={`flex items-center gap-2 text-sm font-bold ${isOver ? 'text-primary' : 'text-muted-foreground/50'}`}><ArrowDownToLine className="size-4" />{isOver ? `In ${tier.label} ablegen` : `${tier.helper} – hier ablegen`}</span>}
+        {items.map((item, index) => <DraggableChip key={item.id} item={item} onUnassign={() => unassign(item.id)} onMove={(direction) => move(item.id, direction)} canMoveUp={index > 0} canMoveDown={index < items.length - 1} />)}
+        {!items.length && <span className={`flex items-center gap-2 text-sm font-bold ${isOver ? 'text-primary' : 'text-muted-foreground/50'}`}><ArrowDownToLine className="size-4" />{isOver ? `In ${tier.label} ablegen` : `Hier in ${tier.label} ablegen`}</span>}
         {isOver && items.length > 0 && <span className="flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-black text-primary-foreground"><ArrowDownToLine className="size-3.5" /> Hier ablegen</span>}
       </div>
     </div>
   );
 }
 
-function UnrankedCard({ item, assign }: { item: RankingItem; assign: (score: number) => void }) {
+function UnrankedCard({ item, tiers, assign }: { item: RankingItem; tiers: RankingTier[]; assign: (score: number) => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: item.id });
   return (
     <div ref={setNodeRef} className="rounded-xl border-2 border-foreground bg-card p-3" style={{ transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined, opacity: isDragging ? 0.25 : 1 }}>
-      <div className="mb-3 flex items-center justify-between gap-3"><p className="font-black">{item.label}</p><button {...listeners} {...attributes} className="touch-none cursor-grab rounded-lg border-2 border-foreground bg-muted p-1.5 active:cursor-grabbing" aria-label={`${item.label} ziehen`} title="In eine Stufe ziehen"><GripVertical className="size-4" /></button></div>
-      <div className="grid grid-cols-5 gap-2">{tiers.map((tier) => <button key={tier.score} aria-label={`${item.label} als ${tier.label} einstufen`} onClick={() => assign(tier.score)} className="h-10 rounded-lg border-2 border-foreground text-sm font-black transition hover:-translate-y-0.5" style={{ background: tier.color }}>{tier.label}</button>)}</div>
+      <div className="mb-3 flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3">{item.imageData && <img src={item.imageData} alt="" className="size-12 shrink-0 rounded-lg border-2 border-foreground object-cover" />}<p className="font-black">{item.label}</p></div><button {...listeners} {...attributes} className="touch-none cursor-grab rounded-lg border-2 border-foreground bg-muted p-1.5 active:cursor-grabbing" aria-label={`${item.label} ziehen`} title="In eine Stufe ziehen"><GripVertical className="size-4" /></button></div>
+      <div className="flex flex-wrap gap-2">{tiers.map((tier) => <button key={tier.score} aria-label={`${item.label} als ${tier.label} einstufen`} onClick={() => assign(tier.score)} className="min-h-10 min-w-12 flex-1 rounded-lg border-2 border-foreground px-2 text-sm font-black transition hover:-translate-y-0.5" style={{ background: tier.color }}>{tier.label}</button>)}</div>
     </div>
   );
 }
@@ -78,6 +74,7 @@ function UnrankedZone({ children, dragging }: { children: React.ReactNode; dragg
 export function RankingVote({ slug }: { slug: string }) {
   const [ranking, setRanking] = useState<RankingData | null>(null);
   const [scores, setScores] = useState<Record<string, number>>({});
+  const [orders, setOrders] = useState<Record<string, number>>({});
   const [account, setAccount] = useState<{ user: { displayName: string; email: string } | null; signInPath: string } | null>(null);
   const [editToken, setEditToken] = useState<string | null>(null);
   const [hasSavedVote, setHasSavedVote] = useState(false);
@@ -138,16 +135,18 @@ export function RankingVote({ slug }: { slug: string }) {
         if (storedToken) {
           const savedResponse = await fetch(`/api/rankings/${slug}/vote?token=${encodeURIComponent(storedToken)}`);
           if (savedResponse.ok) {
-            const saved = await savedResponse.json() as { scores: Record<string, number> };
-            if (!cancelled) { setEditToken(storedToken); setScores(saved.scores); setHasSavedVote(true); }
+            const saved = await savedResponse.json() as { scores: Record<string, number>; orders?: Record<string, number> };
+            if (!cancelled) { setEditToken(storedToken); setScores(saved.scores); setOrders(saved.orders ?? {}); setHasSavedVote(true); }
             loadedSavedVote = true;
           } else { localStorage.removeItem(`rankly-ballot-${slug}`); }
         }
         if (!loadedSavedVote) {
           try {
-            const draft = JSON.parse(localStorage.getItem(`rankly-vote-draft-${slug}`) ?? '{}') as Record<string, number>;
-            const validDraft = Object.fromEntries(Object.entries(draft).filter(([itemId, score]) => data.items.some((item) => item.id === itemId) && Number.isInteger(score) && score >= 1 && score <= 5));
-            if (Object.keys(validDraft).length > 0 && !cancelled) { setScores(validDraft); setRestoredDraft(true); }
+            const draft = JSON.parse(localStorage.getItem(`rankly-vote-draft-${slug}`) ?? '{}') as Record<string, unknown>;
+            const draftScores = draft.scores && typeof draft.scores === 'object' ? draft.scores as Record<string, number> : draft as Record<string, number>;
+            const draftOrders = draft.orders && typeof draft.orders === 'object' ? draft.orders as Record<string, number> : {};
+            const validDraft = Object.fromEntries(Object.entries(draftScores).filter(([itemId, score]) => data.items.some((item) => item.id === itemId) && Number.isInteger(score) && score >= 1 && score <= data.tiers.length));
+            if (Object.keys(validDraft).length > 0 && !cancelled) { setScores(validDraft); setOrders(draftOrders); setRestoredDraft(true); }
           } catch { localStorage.removeItem(`rankly-vote-draft-${slug}`); }
         }
         if (!cancelled) setVoteReady(true);
@@ -160,9 +159,9 @@ export function RankingVote({ slug }: { slug: string }) {
 
   useEffect(() => {
     if (!voteReady) return;
-    if (Object.keys(scores).length > 0) localStorage.setItem(`rankly-vote-draft-${slug}`, JSON.stringify(scores));
+    if (Object.keys(scores).length > 0) localStorage.setItem(`rankly-vote-draft-${slug}`, JSON.stringify({ scores, orders }));
     else localStorage.removeItem(`rankly-vote-draft-${slug}`);
-  }, [scores, slug, voteReady]);
+  }, [orders, scores, slug, voteReady]);
 
   useEffect(() => {
     if (!ranking?.closesAt || ranking.closesAt <= now) return;
@@ -172,7 +171,7 @@ export function RankingVote({ slug }: { slug: string }) {
 
   const assigned = Object.keys(scores).length;
   const complete = ranking ? assigned === ranking.items.length : false;
-  const grouped = useMemo(() => new Map(tiers.map((tier) => [tier.score, ranking?.items.filter((item) => scores[item.id] === tier.score) ?? []])), [ranking, scores]);
+  const grouped = useMemo(() => new Map((ranking?.tiers ?? []).map((tier) => [tier.score, (ranking?.items.filter((item) => scores[item.id] === tier.score) ?? []).sort((a, b) => (orders[a.id] ?? a.position) - (orders[b.id] ?? b.position))])), [orders, ranking, scores]);
   const activeItem = ranking?.items.find((item) => item.id === activeId);
   const closed = Boolean(ranking && (!ranking.isOpen || (ranking.closesAt !== null && now >= ranking.closesAt)));
 
@@ -182,15 +181,26 @@ export function RankingVote({ slug }: { slug: string }) {
   function assign(itemId: string, score: number) {
     remember(scores);
     setScores({ ...scores, [itemId]: score });
+    const tierItems = grouped.get(score) ?? [];
+    setOrders((current) => ({ ...current, [itemId]: tierItems.length }));
     const item = ranking?.items.find((candidate) => candidate.id === itemId);
-    const tier = tiers.find((candidate) => candidate.score === score);
+    const tier = ranking?.tiers.find((candidate) => candidate.score === score);
     if (item && tier) setLiveMessage(`${item.label} wurde Stufe ${tier.label} zugeordnet.`);
+  }
+  function moveWithinTier(itemId: string, direction: -1 | 1) {
+    const score = scores[itemId];
+    const items = grouped.get(score) ?? [];
+    const index = items.findIndex((item) => item.id === itemId);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= items.length) return;
+    setOrders((current) => ({ ...current, [items[index].id]: target, [items[target].id]: index }));
   }
   function unassign(itemId: string) {
     remember(scores);
     const next = { ...scores };
     delete next[itemId];
     setScores(next);
+    setOrders((current) => { const nextOrders = { ...current }; delete nextOrders[itemId]; return nextOrders; });
     const item = ranking?.items.find((candidate) => candidate.id === itemId);
     if (item) setLiveMessage(`${item.label} wurde zurückgesetzt.`);
   }
@@ -207,6 +217,7 @@ export function RankingVote({ slug }: { slug: string }) {
     if (Object.keys(scores).length === 0) return;
     remember(scores);
     setScores({});
+    setOrders({});
     setLiveMessage('Alle Zuordnungen wurden zurückgesetzt.');
   }
   function handleDragStart(event: DragStartEvent) {
@@ -223,7 +234,7 @@ export function RankingVote({ slug }: { slug: string }) {
     if (target === 'unranked') unassign(itemId);
     else if (target.startsWith('tier-')) {
       const score = Number(target.slice(5));
-      if (score >= 1 && score <= 5) assign(itemId, score);
+      if (ranking && score >= 1 && score <= ranking.tiers.length) assign(itemId, score);
     }
   }
 
@@ -238,7 +249,7 @@ export function RankingVote({ slug }: { slug: string }) {
     setSubmitting(true);
     setError('');
     try {
-      const response = await fetch(`/api/rankings/${slug}/vote`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scores, editToken }) });
+      const response = await fetch(`/api/rankings/${slug}/vote`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ scores, orders, editToken }) });
       const data = await response.json() as { error?: string; editToken?: string; updated?: boolean; signInPath?: string };
       if (response.status === 401 && data.signInPath) {
         window.location.href = data.signInPath;
@@ -306,19 +317,19 @@ export function RankingVote({ slug }: { slug: string }) {
         {restoredDraft && !hasSavedVote && <div className="mt-7 flex items-center gap-2 rounded-xl border-2 border-primary bg-[#e9e4ff] px-4 py-3 font-bold text-primary"><Cloud className="size-5" /> Dein letzter Entwurf wurde auf diesem Gerät wiederhergestellt.</div>}
 
         <div className="mt-8 grid gap-4 rounded-[1.5rem] border-2 border-foreground bg-card p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-6">
-          <div><div className="flex items-center gap-2"><Info className="size-5 text-primary" /><h2 className="font-black">So funktioniert’s</h2></div><p className="mt-1 text-sm font-semibold text-muted-foreground">Ziehe Optionen in eine Stufe oder tippe direkt auf S bis D. Bereits einsortierte Optionen kannst du jederzeit weiterziehen.</p></div>
+          <div><div className="flex items-center gap-2"><Info className="size-5 text-primary" /><h2 className="font-black">So funktioniert’s</h2></div><p className="mt-1 text-sm font-semibold text-muted-foreground">Ziehe Optionen in eine Stufe oder tippe auf einen Stufennamen. Mit den Pfeilen bestimmst du zusätzlich die Reihenfolge innerhalb einer Stufe.</p></div>
           <div className="min-w-40"><div className="mb-2 flex justify-between text-xs font-black"><span>Fortschritt</span><span>{assigned}/{ranking.items.length}</span></div><div className="h-3 overflow-hidden rounded-full border-2 border-foreground bg-muted"><div className="h-full bg-primary transition-[width] duration-300" style={{ width: `${(assigned / ranking.items.length) * 100}%` }} /></div></div>
         </div>
 
         <p className="sr-only" aria-live="polite">{liveMessage}</p>
         <DndContext sensors={sensors} collisionDetection={collisionDetection} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveId(null)}>
           <div className="mt-6 overflow-hidden rounded-[1.5rem] border-[3px] border-foreground bg-card shadow-[7px_7px_0_var(--ink)]">
-            {tiers.map((tier, index) => <TierRow key={tier.score} tier={tier} items={grouped.get(tier.score) ?? []} last={index === tiers.length - 1} unassign={unassign} dragging={Boolean(activeId)} />)}
+            {ranking.tiers.map((tier, index) => <TierRow key={tier.id} tier={tier} items={grouped.get(tier.score) ?? []} last={index === ranking.tiers.length - 1} unassign={unassign} move={moveWithinTier} dragging={Boolean(activeId)} />)}
           </div>
 
           <UnrankedZone dragging={Boolean(activeId)}>
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-2xl font-black tracking-tight">Noch einordnen</h2><p className="text-sm font-semibold text-muted-foreground">Nicht sicher? Du kannst jede Entscheidung später ändern.</p></div>{activeId && scores[activeId] && <span className="flex items-center gap-2 rounded-full border-2 border-foreground bg-card px-3 py-1.5 text-sm font-black"><RotateCcw className="size-4" /> Hier ablegen zum Zurücksetzen</span>}</div>
-            <div className="grid gap-3 md:grid-cols-2">{ranking.items.filter((item) => !scores[item.id]).map((item) => <UnrankedCard key={item.id} item={item} assign={(score) => assign(item.id, score)} />)}</div>
+            <div className="grid gap-3 md:grid-cols-2">{ranking.items.filter((item) => !scores[item.id]).map((item) => <UnrankedCard key={item.id} item={item} tiers={ranking.tiers} assign={(score) => assign(item.id, score)} />)}</div>
             {complete && <div className="flex items-center gap-3 rounded-xl border-2 border-[#18713b] bg-[#d9f7e4] px-4 py-4 font-bold text-[#125a2f]"><CheckCircle2 className="size-6 shrink-0" /><div><p className="font-black">Alles eingeordnet!</p><p className="text-sm">Prüfe deine Auswahl oder speichere sie direkt.</p></div></div>}
           </UnrankedZone>
 

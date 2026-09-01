@@ -24,8 +24,8 @@ export async function GET(request: Request, { params }: RouteContext) {
     WHERE b.ranking_id = ? AND t.token = ?
   `).bind(ranking.id, token).first<{ id: string; voterName: string }>();
   if (!ballot) return Response.json({ error: 'Gespeicherte Abstimmung nicht gefunden.' }, { status: 404 });
-  const rows = await db.prepare('SELECT item_id AS itemId, tier FROM scores WHERE ballot_id = ?').bind(ballot.id).all<{ itemId: string; tier: number }>();
-  return Response.json({ voterName: ballot.voterName, scores: Object.fromEntries(rows.results.map((row) => [row.itemId, Number(row.tier)])) });
+  const rows = await db.prepare('SELECT item_id AS itemId, tier, rank_position AS rankPosition FROM scores WHERE ballot_id = ?').bind(ballot.id).all<{ itemId: string; tier: number; rankPosition: number }>();
+  return Response.json({ voterName: ballot.voterName, scores: Object.fromEntries(rows.results.map((row) => [row.itemId, Number(row.tier)])), orders: Object.fromEntries(rows.results.map((row) => [row.itemId, Number(row.rankPosition)])) });
 }
 
 export async function POST(request: Request, { params }: RouteContext) {
@@ -46,11 +46,18 @@ export async function POST(request: Request, { params }: RouteContext) {
     if (!ranking.isOpen || (ranking.closesAt !== null && Date.now() >= ranking.closesAt)) {
       return Response.json({ error: 'Diese Abstimmung ist bereits geschlossen.' }, { status: 409 });
     }
-    const body = await request.json() as { scores?: unknown; editToken?: unknown };
+    const body = await request.json() as { scores?: unknown; orders?: unknown; editToken?: unknown };
     const scores = body.scores && typeof body.scores === 'object' ? body.scores as Record<string, unknown> : {};
+    const orders = body.orders && typeof body.orders === 'object' ? body.orders as Record<string, unknown> : {};
     const itemIds = new Set(ranking.items.map((item) => item.id));
-    const entries = Object.entries(scores).filter(([itemId, tier]) => itemIds.has(itemId) && Number.isInteger(tier) && Number(tier) >= 1 && Number(tier) <= 5);
+    const entries = Object.entries(scores).filter(([itemId, tier]) => itemIds.has(itemId) && Number.isInteger(tier) && Number(tier) >= 1 && Number(tier) <= ranking.tiers.length);
     if (entries.length !== ranking.items.length) return Response.json({ error: 'Bitte ordne jede Option einer Stufe zu.' }, { status: 400 });
+    const itemPositions = new Map(ranking.items.map((item) => [item.id, item.position]));
+    const orderedEntries = entries.map(([itemId, tier]) => ({ itemId, tier: Number(tier), requestedOrder: Number.isInteger(orders[itemId]) && Number(orders[itemId]) >= 0 ? Number(orders[itemId]) : 0 }));
+    const normalizedEntries = orderedEntries.map((entry) => {
+      const rankPosition = orderedEntries.filter((candidate) => candidate.tier === entry.tier).sort((a, b) => a.requestedOrder - b.requestedOrder || (itemPositions.get(a.itemId) ?? 0) - (itemPositions.get(b.itemId) ?? 0)).findIndex((candidate) => candidate.itemId === entry.itemId);
+      return [entry.itemId, entry.tier, rankPosition] as const;
+    });
     await ensureSchema();
     const profile = await getUserProfile(user);
     const voterName = profile.displayName;
@@ -66,7 +73,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       await db.prepare('DELETE FROM scores WHERE ballot_id = ?').bind(existing.id).run();
       await db.batch([
         db.prepare('UPDATE ballots SET voter_name = ?, created_at = ? WHERE id = ?').bind(voterName, Date.now(), existing.id),
-        ...entries.map(([itemId, tier]) => db.prepare('INSERT INTO scores (ballot_id, item_id, tier) VALUES (?, ?, ?)').bind(existing.id, itemId, Number(tier))),
+        ...normalizedEntries.map(([itemId, tier, rankPosition]) => db.prepare('INSERT INTO scores (ballot_id, item_id, tier, rank_position) VALUES (?, ?, ?, ?)').bind(existing.id, itemId, tier, rankPosition)),
       ]);
       return Response.json({ ok: true, editToken: requestedToken, updated: true });
     }
@@ -76,7 +83,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     await db.batch([
       db.prepare('INSERT INTO ballots (id, ranking_id, voter_name, created_at) VALUES (?, ?, ?, ?)').bind(ballotId, ranking.id, voterName, Date.now()),
       db.prepare('INSERT INTO ballot_edit_tokens (ballot_id, token) VALUES (?, ?)').bind(ballotId, editToken),
-      ...entries.map(([itemId, tier]) => db.prepare('INSERT INTO scores (ballot_id, item_id, tier) VALUES (?, ?, ?)').bind(ballotId, itemId, Number(tier))),
+      ...normalizedEntries.map(([itemId, tier, rankPosition]) => db.prepare('INSERT INTO scores (ballot_id, item_id, tier, rank_position) VALUES (?, ?, ?, ?)').bind(ballotId, itemId, tier, rankPosition)),
     ]);
     return Response.json({ ok: true, editToken, updated: false }, { status: 201 });
   } catch {

@@ -21,7 +21,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const user = await getChatGPTUser();
     if (!user) return Response.json({ error: 'Bitte melde dich zuerst an.' }, { status: 401 });
     const { slug } = await params;
-    const body = await request.json() as { title?: unknown; description?: unknown; isOpen?: unknown; closesAt?: unknown; accessMode?: unknown; password?: unknown; items?: unknown };
+    const body = await request.json() as { title?: unknown; description?: unknown; isOpen?: unknown; closesAt?: unknown; accessMode?: unknown; password?: unknown; items?: unknown; tiers?: unknown };
     const title = typeof body.title === 'string' ? body.title.trim().slice(0, 100) : '';
     const description = typeof body.description === 'string' ? body.description.trim().slice(0, 280) : '';
     const closesAt = typeof body.closesAt === 'number' && Number.isFinite(body.closesAt) ? Math.trunc(body.closesAt) : null;
@@ -29,13 +29,24 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const password = typeof body.password === 'string' ? body.password : '';
     const items = Array.isArray(body.items) ? body.items.flatMap((value) => {
       if (!value || typeof value !== 'object') return [];
-      const item = value as { id?: unknown; label?: unknown };
+      const item = value as { id?: unknown; label?: unknown; imageData?: unknown };
       const label = typeof item.label === 'string' ? item.label.trim().slice(0, 80) : '';
       if (!label) return [];
-      return [{ id: typeof item.id === 'string' ? item.id : undefined, label }];
+      const imageData = item.imageData === null ? null : typeof item.imageData === 'string' && /^data:image\/(?:webp|png|jpeg);base64,/.test(item.imageData) && item.imageData.length <= 120_000 ? item.imageData : undefined;
+      return [{ id: typeof item.id === 'string' ? item.id : undefined, label, imageData }];
     }).slice(0, 30) : [];
+    const tiers = Array.isArray(body.tiers) ? body.tiers.flatMap((value) => {
+      if (!value || typeof value !== 'object') return [];
+      const tier = value as { id?: unknown; label?: unknown; color?: unknown };
+      const label = typeof tier.label === 'string' ? tier.label.trim().slice(0, 24) : '';
+      const color = typeof tier.color === 'string' && /^#[0-9a-f]{6}$/i.test(tier.color) ? tier.color : '';
+      if (!label || !color) return [];
+      return [{ id: typeof tier.id === 'string' ? tier.id : undefined, label, color }];
+    }).slice(0, 8) : [];
     if (title.length < 3) return Response.json({ error: 'Bitte gib einen Titel mit mindestens 3 Zeichen ein.' }, { status: 400 });
     if (items.length < 2) return Response.json({ error: 'Bitte behalte mindestens 2 Optionen.' }, { status: 400 });
+    if (items.reduce((total, item) => total + (item.imageData?.length ?? 0), 0) > 3_600_000) return Response.json({ error: 'Die Bilder sind zusammen zu gross.' }, { status: 400 });
+    if (tiers.length < 2) return Response.json({ error: 'Bitte verwende mindestens 2 Stufen.' }, { status: 400 });
     if (body.closesAt !== null && body.closesAt !== undefined && closesAt === null) return Response.json({ error: 'Die Abstimmungsfrist ist ungültig.' }, { status: 400 });
     if (accessMode === 'password' && password && (password.length < 6 || password.length > 100)) return Response.json({ error: 'Das neue Passwort muss 6 bis 100 Zeichen lang sein.' }, { status: 400 });
     if (new Set(items.map((item) => item.label.toLocaleLowerCase('de'))).size !== items.length) {
@@ -45,9 +56,11 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     if (new Set(submittedIds).size !== submittedIds.length) {
       return Response.json({ error: 'Ungültige doppelte Option.' }, { status: 400 });
     }
+    const submittedTierIds = tiers.flatMap((tier) => tier.id ? [tier.id] : []);
+    if (new Set(submittedTierIds).size !== submittedTierIds.length) return Response.json({ error: 'Ungültige doppelte Stufe.' }, { status: 400 });
     const passwordHash = accessMode === 'password' && password ? await hashPassword(password) : undefined;
     const isOpen = typeof body.isOpen === 'boolean' ? body.isOpen : undefined;
-    const updated = await updateOwnedRanking(slug, user.userId, { title, description, isOpen, closesAt, accessMode, passwordHash, items });
+    const updated = await updateOwnedRanking(slug, user.userId, { title, description, isOpen, closesAt, accessMode, passwordHash, items, tiers });
     if (!updated) return Response.json({ error: 'Du darfst dieses Ranking nicht bearbeiten.' }, { status: 403 });
     return Response.json({ ok: true, slug });
   } catch {

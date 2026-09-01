@@ -1,13 +1,40 @@
 'use client';
+/* oxlint-disable next/no-img-element -- uploaded images are already resized client-side data URLs */
 
 import { useState } from 'react';
-import { AlertOctagon, AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, BarChart3, Clock3, CopyPlus, Globe2, KeyRound, LockKeyhole, Mail, Plus, Save, Trash2, Unlock, X } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, BarChart3, Clock3, CopyPlus, Globe2, ImagePlus, KeyRound, LockKeyhole, Mail, Plus, Save, Trash2, Unlock, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import type { OwnedRankingData, RankingAccessMode } from '@/db/rankings';
 
-type EditItem = { key: string; id?: string; label: string };
+type EditItem = { key: string; id?: string; label: string; imageData: string | null };
+type EditTier = { key: string; id?: string; label: string; color: string };
+
+function resizeImage(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    if (file.size > 8_000_000) { reject(new Error('Das Bild darf höchstens 8 MB gross sein.')); return; }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Das Bild konnte nicht gelesen werden.'));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error('Dieses Bildformat wird nicht unterstützt.'));
+      image.onload = () => {
+        const scale = Math.min(1, 360 / Math.max(image.width, image.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        canvas.getContext('2d')?.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const data = canvas.toDataURL('image/webp', 0.7);
+        if (data.length > 120_000) reject(new Error('Das verkleinerte Bild ist noch zu gross. Bitte wähle ein anderes.'));
+        else resolve(data);
+      };
+      if (typeof reader.result !== 'string') { reject(new Error('Das Bild konnte nicht gelesen werden.')); return; }
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 function toDateTimeLocal(timestamp: number | null) {
   if (!timestamp) return '';
@@ -23,7 +50,8 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
   const [closesAt, setClosesAt] = useState(toDateTimeLocal(ranking.closesAt));
   const [accessMode, setAccessMode] = useState<RankingAccessMode>(ranking.accessMode);
   const [password, setPassword] = useState('');
-  const [items, setItems] = useState<EditItem[]>(ranking.items.map((item) => ({ key: item.id, id: item.id, label: item.label })));
+  const [items, setItems] = useState<EditItem[]>(ranking.items.map((item) => ({ key: item.id, id: item.id, label: item.label, imageData: item.imageData })));
+  const [tiers, setTiers] = useState<EditTier[]>(ranking.tiers.map((tier) => ({ key: tier.id, id: tier.id, label: tier.label, color: tier.color })));
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmationTitle, setConfirmationTitle] = useState('');
@@ -47,7 +75,22 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
 
   function addItem() {
     if (items.length >= 30) return;
-    setItems((current) => [...current, { key: crypto.randomUUID(), label: '' }]);
+    setItems((current) => [...current, { key: crypto.randomUUID(), label: '', imageData: null }]);
+  }
+
+  function moveTier(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= tiers.length) return;
+    setTiers((current) => { const next = [...current]; [next[index], next[target]] = [next[target], next[index]]; return next; });
+  }
+
+  async function chooseImage(key: string, file?: File) {
+    if (!file) return;
+    setError('');
+    try {
+      const imageData = await resizeImage(file);
+      setItems((current) => current.map((item) => item.key === key ? { ...item, imageData } : item));
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Bild konnte nicht verarbeitet werden.'); }
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -58,7 +101,7 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
       const response = await fetch(`/api/rankings/${ranking.slug}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title, description, isOpen, closesAt: closesAt ? new Date(closesAt).getTime() : null, accessMode, password, items: items.map(({ id, label }) => ({ id, label })) }),
+        body: JSON.stringify({ title, description, isOpen, closesAt: closesAt ? new Date(closesAt).getTime() : null, accessMode, password, items: items.map(({ id, label, imageData }) => ({ id, label, imageData })), tiers: tiers.map(({ id, label, color }) => ({ id, label, color })) }),
       });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error ?? 'Speichern fehlgeschlagen.');
@@ -123,8 +166,14 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
       </section>
 
       <section className="rounded-[1.5rem] border-[3px] border-foreground bg-card p-5 shadow-[7px_7px_0_var(--ink)] sm:p-7">
+        <div className="flex items-end justify-between gap-4"><div><h2 className="text-2xl font-black">Stufen</h2><p className="mt-1 text-sm font-semibold text-muted-foreground">Namen, Farben und Reihenfolge selbst festlegen.</p></div><span className="rounded-full border-2 border-foreground bg-[#fff1a8] px-3 py-1 text-sm font-black">{tiers.length}/8</span></div>
+        <ol className="mt-6 grid gap-3">{tiers.map((tier, index) => <li key={tier.key} className="grid grid-cols-[auto_52px_1fr_auto] items-center gap-2 rounded-xl border-2 border-foreground bg-background p-2"><span className="grid size-9 place-items-center rounded-lg text-sm font-black" style={{ background: tier.color }}>{index + 1}</span><input type="color" value={tier.color} onChange={(event) => setTiers((current) => current.map((entry) => entry.key === tier.key ? { ...entry, color: event.target.value } : entry))} className="h-10 w-12 cursor-pointer rounded-lg border-2 border-foreground bg-transparent p-1" aria-label={`Farbe von Stufe ${tier.label}`} /><Input required maxLength={24} value={tier.label} onChange={(event) => setTiers((current) => current.map((entry) => entry.key === tier.key ? { ...entry, label: event.target.value } : entry))} aria-label={`Name der Stufe ${index + 1}`} className="h-10 border-0 bg-transparent px-2 font-bold shadow-none focus-visible:ring-0" /><div className="flex"><button type="button" onClick={() => moveTier(index, -1)} disabled={index === 0} className="grid size-9 place-items-center rounded-lg hover:bg-muted disabled:opacity-25" aria-label="Stufe nach oben"><ArrowUp className="size-4" /></button><button type="button" onClick={() => moveTier(index, 1)} disabled={index === tiers.length - 1} className="grid size-9 place-items-center rounded-lg hover:bg-muted disabled:opacity-25" aria-label="Stufe nach unten"><ArrowDown className="size-4" /></button><button type="button" onClick={() => setTiers((current) => current.filter((entry) => entry.key !== tier.key))} disabled={tiers.length <= 2} className="grid size-9 place-items-center rounded-lg text-[#9a2820] hover:bg-[#ffe2df] disabled:opacity-25" aria-label="Stufe entfernen"><Trash2 className="size-4" /></button></div></li>)}</ol>
+        <Button type="button" variant="outline" onClick={() => setTiers((current) => [...current, { key: crypto.randomUUID(), label: `Stufe ${current.length + 1}`, color: '#d9cffd' }])} disabled={tiers.length >= 8} className="mt-4 h-11 border-2 border-dashed border-foreground font-black"><Plus /> Stufe hinzufügen</Button>
+      </section>
+
+      <section className="rounded-[1.5rem] border-[3px] border-foreground bg-card p-5 shadow-[7px_7px_0_var(--ink)] sm:p-7">
         <div className="flex items-end justify-between gap-4"><div><h2 className="text-2xl font-black">Optionen</h2><p className="mt-1 text-sm font-semibold text-muted-foreground">Umbenennen, sortieren oder neue hinzufügen.</p></div><span className="rounded-full border-2 border-foreground bg-[#d9cffd] px-3 py-1 text-sm font-black">{items.length}/30</span></div>
-        <ol className="mt-6 grid gap-3">{items.map((item, index) => <li key={item.key} className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-xl border-2 border-foreground bg-background p-2"><span className="grid size-9 place-items-center rounded-lg bg-muted text-sm font-black">{index + 1}</span><Input required maxLength={80} value={item.label} onChange={(event) => updateItem(item.key, event.target.value)} aria-label={`Option ${index + 1}`} className="h-10 border-0 bg-transparent px-2 font-bold shadow-none focus-visible:ring-0" /><div className="flex"><button type="button" onClick={() => moveItem(index, -1)} disabled={index === 0} className="grid size-9 place-items-center rounded-lg hover:bg-muted disabled:opacity-25" aria-label={`${item.label || `Option ${index + 1}`} nach oben`}><ArrowUp className="size-4" /></button><button type="button" onClick={() => moveItem(index, 1)} disabled={index === items.length - 1} className="grid size-9 place-items-center rounded-lg hover:bg-muted disabled:opacity-25" aria-label={`${item.label || `Option ${index + 1}`} nach unten`}><ArrowDown className="size-4" /></button><button type="button" onClick={() => setItems((current) => current.filter((candidate) => candidate.key !== item.key))} disabled={items.length <= 2} className="grid size-9 place-items-center rounded-lg text-[#9a2820] hover:bg-[#ffe2df] disabled:opacity-25" aria-label={`${item.label || `Option ${index + 1}`} entfernen`}><Trash2 className="size-4" /></button></div></li>)}</ol>
+        <ol className="mt-6 grid gap-3">{items.map((item, index) => <li key={item.key} className="grid grid-cols-[auto_auto_1fr_auto] items-center gap-2 rounded-xl border-2 border-foreground bg-background p-2"><span className="grid size-9 place-items-center rounded-lg bg-muted text-sm font-black">{index + 1}</span><label className="grid size-11 cursor-pointer place-items-center overflow-hidden rounded-lg border-2 border-dashed border-foreground bg-muted" title="Bild auswählen">{item.imageData ? <img src={item.imageData} alt="" className="size-full object-cover" /> : <ImagePlus className="size-5" />}<input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(event) => void chooseImage(item.key, event.target.files?.[0])} /></label><div className="min-w-0"><Input required maxLength={80} value={item.label} onChange={(event) => updateItem(item.key, event.target.value)} aria-label={`Option ${index + 1}`} className="h-10 border-0 bg-transparent px-2 font-bold shadow-none focus-visible:ring-0" />{item.imageData && <button type="button" onClick={() => setItems((current) => current.map((entry) => entry.key === item.key ? { ...entry, imageData: null } : entry))} className="px-2 text-xs font-bold text-[#9a2820] hover:underline">Bild entfernen</button>}</div><div className="flex"><button type="button" onClick={() => moveItem(index, -1)} disabled={index === 0} className="grid size-9 place-items-center rounded-lg hover:bg-muted disabled:opacity-25" aria-label={`${item.label || `Option ${index + 1}`} nach oben`}><ArrowUp className="size-4" /></button><button type="button" onClick={() => moveItem(index, 1)} disabled={index === items.length - 1} className="grid size-9 place-items-center rounded-lg hover:bg-muted disabled:opacity-25" aria-label={`${item.label || `Option ${index + 1}`} nach unten`}><ArrowDown className="size-4" /></button><button type="button" onClick={() => setItems((current) => current.filter((candidate) => candidate.key !== item.key))} disabled={items.length <= 2} className="grid size-9 place-items-center rounded-lg text-[#9a2820] hover:bg-[#ffe2df] disabled:opacity-25" aria-label={`${item.label || `Option ${index + 1}`} entfernen`}><Trash2 className="size-4" /></button></div></li>)}</ol>
         <Button type="button" variant="outline" onClick={addItem} disabled={items.length >= 30} className="mt-4 h-11 border-2 border-dashed border-foreground font-black"><Plus /> Option hinzufügen</Button>
       </section>
 
@@ -138,7 +187,7 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
       </section>
 
       {error && <p role="alert" className="rounded-xl border-2 border-[#a31d1d] bg-[#ffe2df] px-4 py-3 font-bold text-[#8a1717]">{error}</p>}
-      <div className="sticky bottom-4 z-20 flex flex-col gap-3 rounded-[1.25rem] border-[3px] border-foreground bg-card/95 p-4 shadow-[6px_6px_0_var(--ink)] backdrop-blur sm:flex-row sm:items-center sm:justify-between"><a href="/mine" className="inline-flex items-center gap-2 text-sm font-black text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" /> Abbrechen</a><div className="flex flex-col gap-2 sm:flex-row"><a href={`/r/${ranking.slug}/results`} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 font-black hover:bg-muted"><BarChart3 className="size-4" /> Auswertung</a><Button type="submit" disabled={saving || items.length < 2} className="h-11 border-2 border-foreground px-5 font-black shadow-[3px_3px_0_var(--ink)]">{saving ? 'Wird gespeichert…' : 'Änderungen speichern'} <Save /></Button></div></div>
+      <div className="sticky bottom-4 z-20 flex flex-col gap-3 rounded-[1.25rem] border-[3px] border-foreground bg-card/95 p-4 shadow-[6px_6px_0_var(--ink)] backdrop-blur sm:flex-row sm:items-center sm:justify-between"><a href="/mine" className="inline-flex items-center gap-2 text-sm font-black text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" /> Abbrechen</a><div className="flex flex-col gap-2 sm:flex-row"><a href={`/r/${ranking.slug}/results`} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 font-black hover:bg-muted"><BarChart3 className="size-4" /> Auswertung</a><Button type="submit" disabled={saving || items.length < 2 || tiers.length < 2} className="h-11 border-2 border-foreground px-5 font-black shadow-[3px_3px_0_var(--ink)]">{saving ? 'Wird gespeichert…' : 'Änderungen speichern'} <Save /></Button></div></div>
     </form>
   );
 }

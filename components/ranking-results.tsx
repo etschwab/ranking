@@ -1,4 +1,5 @@
 'use client';
+/* oxlint-disable next/no-img-element -- option thumbnails are pre-compressed data URLs */
 
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CheckCircle2, Clock3, Copy, Crown, Download, LockKeyhole, Medal, Pencil, RefreshCw, Share2, Users } from 'lucide-react';
@@ -6,18 +7,11 @@ import { BrandHeader } from '@/components/brand-header';
 import { Button } from '@/components/ui/button';
 import { RankingAccessGate } from '@/components/ranking-access-gate';
 import { RankingSocial } from '@/components/ranking-social';
-import type { RankingAccessMode, RankingData, RankingItem } from '@/db/rankings';
+import type { RankingAccessMode, RankingData, RankingItem, RankingTier } from '@/db/rankings';
 
-const tiers = [
-  { label: 'D', score: 1, color: 'var(--tier-d)' },
-  { label: 'C', score: 2, color: 'var(--tier-c)' },
-  { label: 'B', score: 3, color: 'var(--tier-b)' },
-  { label: 'A', score: 4, color: 'var(--tier-a)' },
-  { label: 'S', score: 5, color: 'var(--tier-s)' },
-];
-
-function resultTier(item: RankingItem) {
-  return tiers.find((tier) => tier.score === Math.max(1, Math.min(5, Math.round(item.average ?? 1)))) ?? tiers[0];
+function resultTier(item: RankingItem, tiers: RankingTier[]) {
+  const score = Math.max(1, Math.min(tiers.length, Math.round(item.average ?? 1)));
+  return tiers.find((tier) => tier.score === score) ?? tiers[tiers.length - 1];
 }
 
 export function RankingResults({ slug }: { slug: string }) {
@@ -46,7 +40,7 @@ export function RankingResults({ slug }: { slug: string }) {
   }
 
   useEffect(() => { void load(); }, [slug]);
-  const sorted = useMemo(() => [...(ranking?.items ?? [])].sort((a, b) => (b.average ?? 0) - (a.average ?? 0) || a.position - b.position), [ranking]);
+  const sorted = useMemo(() => [...(ranking?.items ?? [])].sort((a, b) => (b.average ?? 0) - (a.average ?? 0) || (a.averageRankPosition ?? 0) - (b.averageRankPosition ?? 0) || a.position - b.position), [ranking]);
 
   async function copyVoteLink() {
     await navigator.clipboard.writeText(`${window.location.origin}/r/${slug}`);
@@ -91,16 +85,16 @@ export function RankingResults({ slug }: { slug: string }) {
           </div>
         ) : (
           <>
-            <section className="mt-10"><div className="mb-4 flex items-center gap-2"><Crown className="size-5 text-primary" /><h2 className="text-sm font-black uppercase tracking-[0.14em] text-primary">Euer Top 3 Podium</h2></div><ol className="grid gap-4 sm:grid-cols-3">{sorted.slice(0, 3).map((item, index) => { const tier = resultTier(item); return <li key={item.id} className={`rankly-card relative overflow-hidden rounded-[1.35rem] border-[3px] border-foreground bg-card p-5 shadow-[5px_5px_0_var(--ink)] ${index === 0 ? 'sm:-translate-y-2' : ''}`}><div className="absolute right-0 top-0 grid size-12 place-items-center rounded-bl-2xl border-b-2 border-l-2 border-foreground text-xl font-black" style={{ background: index === 0 ? '#fff1a8' : index === 1 ? '#e7e4df' : '#f3c6a8' }}>#{index + 1}</div><span className="grid size-12 place-items-center rounded-xl border-2 border-foreground text-xl font-black" style={{ background: tier.color }}>{tier.label}</span><h3 className="mt-5 pr-8 text-xl font-black">{item.label}</h3><p className="mt-1 text-sm font-bold text-muted-foreground">Ø {item.average?.toFixed(2)} · {item.votes} {item.votes === 1 ? 'Stimme' : 'Stimmen'}</p></li>; })}</ol></section>
+            <section className="mt-10"><div className="mb-4 flex items-center gap-2"><Crown className="size-5 text-primary" /><h2 className="text-sm font-black uppercase tracking-[0.14em] text-primary">Euer Top 3 Podium</h2></div><ol className="grid gap-4 sm:grid-cols-3">{sorted.slice(0, 3).map((item, index) => { const tier = resultTier(item, ranking.tiers); return <li key={item.id} className={`rankly-card relative overflow-hidden rounded-[1.35rem] border-[3px] border-foreground bg-card p-5 shadow-[5px_5px_0_var(--ink)] ${index === 0 ? 'sm:-translate-y-2' : ''}`}><div className="absolute right-0 top-0 grid size-12 place-items-center rounded-bl-2xl border-b-2 border-l-2 border-foreground text-xl font-black" style={{ background: index === 0 ? '#fff1a8' : index === 1 ? '#e7e4df' : '#f3c6a8' }}>#{index + 1}</div><div className="flex items-center gap-3">{item.imageData && <img src={item.imageData} alt="" className="size-14 rounded-xl border-2 border-foreground object-cover" />}<span className="grid min-h-12 min-w-12 place-items-center rounded-xl border-2 border-foreground px-2 text-lg font-black" style={{ background: tier.color }}>{tier.label}</span></div><h3 className="mt-5 pr-8 text-xl font-black">{item.label}</h3><p className="mt-1 text-sm font-bold text-muted-foreground">Ø {item.average?.toFixed(2)} · {item.votes} {item.votes === 1 ? 'Stimme' : 'Stimmen'}</p></li>; })}</ol></section>
             <div className="mt-12 grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
               <section className="rounded-[1.75rem] border-[3px] border-foreground bg-card p-5 shadow-[7px_7px_0_var(--ink)] sm:p-7">
                 <div className="mb-5 flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl border-2 border-foreground bg-[#fff1a8]"><Medal /></span><div><p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Gesamtrangliste</p><h2 className="text-2xl font-black">Eure Favoriten</h2></div></div>
-                <ol className="space-y-3">{sorted.map((item, index) => { const tier = resultTier(item); return <li key={item.id} className="grid grid-cols-[42px_52px_1fr_auto] items-center gap-3 rounded-xl border-2 border-foreground bg-background p-3"><span className="text-center text-lg font-black text-muted-foreground">#{index + 1}</span><span className="grid size-11 place-items-center rounded-lg border-2 border-foreground text-xl font-black" style={{ background: tier.color }}>{tier.label}</span><span className="min-w-0 font-black">{item.label}</span><span className="text-sm font-black text-muted-foreground">{item.average?.toFixed(2)}</span></li>; })}</ol>
+                <ol className="space-y-3">{sorted.map((item, index) => { const tier = resultTier(item, ranking.tiers); return <li key={item.id} className="grid grid-cols-[42px_auto_1fr_auto] items-center gap-3 rounded-xl border-2 border-foreground bg-background p-3"><span className="text-center text-lg font-black text-muted-foreground">#{index + 1}</span><div className="flex items-center gap-2">{item.imageData && <img src={item.imageData} alt="" className="size-11 rounded-lg border-2 border-foreground object-cover" />}<span className="grid min-h-11 min-w-11 place-items-center rounded-lg border-2 border-foreground px-2 text-base font-black" style={{ background: tier.color }}>{tier.label}</span></div><span className="min-w-0 font-black">{item.label}</span><span className="text-sm font-black text-muted-foreground">{item.average?.toFixed(2)}</span></li>; })}</ol>
               </section>
 
               <section className="rounded-[1.75rem] border-[3px] border-foreground bg-[#fff5e7] p-5 shadow-[7px_7px_0_var(--ink)] sm:p-7">
                 <p className="text-xs font-black uppercase tracking-[0.14em] text-muted-foreground">Verteilung</p><h2 className="mt-1 text-2xl font-black">So wurde abgestimmt</h2>
-                <div className="mt-6 space-y-6">{sorted.slice(0, 6).map((item) => <div key={item.id}><div className="mb-2 flex justify-between gap-3 text-sm"><span className="font-black">{item.label}</span><span className="font-bold text-muted-foreground">{item.votes}×</span></div><div className="flex h-7 overflow-hidden rounded-lg border-2 border-foreground bg-card">{tiers.slice().reverse().map((tier) => { const count = item.distribution[String(tier.score)] ?? 0; const width = item.votes ? (count / item.votes) * 100 : 0; return width > 0 ? <div key={tier.score} className="grid place-items-center text-[10px] font-black" style={{ width: `${width}%`, background: tier.color }} title={`${tier.label}: ${count}`}>{width >= 13 ? tier.label : ''}</div> : null; })}</div></div>)}</div>
+                <div className="mt-6 space-y-6">{sorted.slice(0, 6).map((item) => <div key={item.id}><div className="mb-2 flex justify-between gap-3 text-sm"><span className="font-black">{item.label}</span><span className="font-bold text-muted-foreground">{item.votes}×</span></div><div className="flex h-7 overflow-hidden rounded-lg border-2 border-foreground bg-card">{ranking.tiers.map((tier) => { const count = item.distribution[String(tier.score)] ?? 0; const width = item.votes ? (count / item.votes) * 100 : 0; return width > 0 ? <div key={tier.id} className="grid place-items-center overflow-hidden text-[10px] font-black" style={{ width: `${width}%`, background: tier.color }} title={`${tier.label}: ${count}`}>{width >= 13 ? tier.label : ''}</div> : null; })}</div></div>)}</div>
               </section>
             </div>
 
