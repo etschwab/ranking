@@ -14,6 +14,7 @@ import {
 import { requireChatGPTUser, chatGPTSignOutPath } from "@/app/chatgpt-auth";
 import { BrandHeader } from "@/components/brand-header";
 import { CopyLinkButton } from "@/components/copy-link-button";
+import { RankingTemplateButton } from "@/components/ranking-template-button";
 import { getRankingsForOwner } from "@/db/rankings";
 import { getUserProfile } from "@/db/profiles";
 
@@ -158,6 +159,7 @@ export default async function MyRankingsPage() {
                             : `/r/${ranking.slug}`
                         }
                       />
+                      <RankingTemplateButton slug={ranking.slug} />
                     </div>
                   </div>
                 </article>

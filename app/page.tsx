@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BarChart3, Check, Clapperboard, Clock3, Globe2, KeyRound, Link2, ListChecks, LockKeyhole, LogIn, Mail, MapPinned, Plus, Save, Share2, Sparkles, Trophy, Utensils, UserRound, WandSparkles } from 'lucide-react';
+import { ArrowRight, BarChart3, BriefcaseBusiness, Check, Clapperboard, Clock3, Gamepad2, Gift, Globe2, KeyRound, Link2, ListChecks, LockKeyhole, LogIn, Mail, MapPinned, Plus, Save, Share2, Sparkles, Trophy, Utensils, UserRound, WandSparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,6 +17,9 @@ const creatorPresets = [
   { label: 'Reiseziele', icon: MapPinned, title: 'Unser nächstes Reiseziel', description: 'Wohin soll unser nächster gemeinsamer Trip gehen?', options: ['Japan', 'Island', 'Portugal', 'Kanada', 'Griechenland'] },
   { label: 'Filmabend', icon: Clapperboard, title: 'Filmabend', description: 'Was schauen wir als Nächstes?', options: ['Dune: Part Two', 'Parasite', 'Interstellar', 'Barbie', 'The Batman'] },
   { label: 'Restaurants', icon: Utensils, title: 'Wo gehen wir essen?', description: 'Unser nächstes gemeinsames Dinner.', options: ['Italienisch', 'Japanisch', 'Mexikanisch', 'Indisch', 'Libanesisch'] },
+  { label: 'Games', icon: Gamepad2, title: 'Unsere besten Games', description: 'Welche Spiele gehören ganz nach oben?', options: ['Minecraft', 'The Legend of Zelda', 'Baldur’s Gate 3', 'Mario Kart', 'Fortnite'] },
+  { label: 'Bewerber', icon: BriefcaseBusiness, title: 'Bewerber vergleichen', description: 'Gemeinsame Einschätzung für die nächste Besetzung.', options: ['Bewerber A', 'Bewerber B', 'Bewerber C', 'Bewerber D'] },
+  { label: 'Geschenkideen', icon: Gift, title: 'Die besten Geschenkideen', description: 'Welche Idee macht am meisten Freude?', options: ['Gemeinsamer Ausflug', 'Fotobuch', 'Konzerttickets', 'Wellness', 'Lieblingsrestaurant'] },
 ];
 
 export default function Home() {
