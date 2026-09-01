@@ -2,6 +2,7 @@ import { db } from '@/db/client';
 
 export type RankingTier = { id: string; label: string; color: string; position: number; score: number };
 export type RankingItem = { id: string; label: string; imageData: string | null; position: number; average: number | null; averageRankPosition: number | null; votes: number; distribution: Record<string, number> };
+export type RankingParticipant = { id: string; voterName: string; createdAt: number; scores: Record<string, { tier: number; rankPosition: number }> };
 export type RankingData = { id: string; slug: string; title: string; description: string; createdAt: number; isOpen: boolean; closesAt: number | null; ballotCount: number; tiers: RankingTier[]; items: RankingItem[] };
 export type RankingAccessMode = 'public' | 'password' | 'invite';
 export type OwnedRankingData = RankingData & { accessMode: RankingAccessMode; hasPassword: boolean; inviteToken: string | null };
@@ -117,6 +118,24 @@ export async function getOwnedRanking(slug: string, userId: string): Promise<Own
   if (!owned) return null;
   const ranking = await getRanking(slug);
   return ranking ? { ...ranking, accessMode: owned.accessMode, hasPassword: Boolean(owned.passwordHash), inviteToken: owned.inviteToken } : null;
+}
+
+export async function getRankingParticipants(rankingId: string): Promise<RankingParticipant[]> {
+  await ensureSchema();
+  const rows = await db.prepare(`
+    SELECT b.id, b.voter_name AS voterName, b.created_at AS createdAt, s.item_id AS itemId, s.tier, s.rank_position AS rankPosition
+    FROM ballots b
+    LEFT JOIN scores s ON s.ballot_id = b.id
+    WHERE b.ranking_id = ?
+    ORDER BY b.created_at DESC, s.rank_position, s.item_id
+  `).bind(rankingId).all<{ id: string; voterName: string; createdAt: number; itemId: string | null; tier: number | null; rankPosition: number | null }>();
+  const participants = new Map<string, RankingParticipant>();
+  for (const row of rows.results) {
+    const participant = participants.get(row.id) ?? { id: row.id, voterName: row.voterName, createdAt: Number(row.createdAt), scores: {} };
+    if (row.itemId && row.tier !== null) participant.scores[row.itemId] = { tier: Number(row.tier), rankPosition: Number(row.rankPosition ?? 0) };
+    participants.set(row.id, participant);
+  }
+  return [...participants.values()];
 }
 
 export async function updateOwnedRanking(slug: string, userId: string, input: { title: string; description: string; isOpen?: boolean; closesAt: number | null; accessMode: RankingAccessMode; passwordHash?: string; items: EditableRankingItem[]; tiers: EditableRankingTier[] }) {
