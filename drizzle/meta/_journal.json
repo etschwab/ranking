@@ -64,6 +64,20 @@
       "when": 1788285988995,
       "tag": "0008_damp_slapstick",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788288553458,
+      "tag": "0009_steady_namorita",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788288589310,
+      "tag": "0010_early_major_mapleleaf",
+      "breakpoints": true
     }
   ]
 }

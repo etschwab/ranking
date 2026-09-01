@@ -1,0 +1,1 @@
+CREATE INDEX `idx_ballots_ranking_user` ON `ballots` (`ranking_id`,`user_id`);

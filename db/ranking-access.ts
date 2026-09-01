@@ -7,6 +7,8 @@ export type RankingAccess = {
   passwordHash: string | null;
   inviteToken: string | null;
   accessToken: string | null;
+  votePinHash: string | null;
+  votePinToken: string | null;
   isOwner: boolean;
 };
 
@@ -19,6 +21,7 @@ export async function getRankingAccess(slug: string, userId?: string): Promise<R
   return db.prepare(`
     SELECT r.id, r.access_mode AS accessMode, r.password_hash AS passwordHash,
       r.invite_token AS inviteToken, r.access_token AS accessToken,
+      r.vote_pin_hash AS votePinHash, r.vote_pin_token AS votePinToken,
       CASE WHEN o.user_id = ? THEN 1 ELSE 0 END AS isOwner
     FROM rankings r
     LEFT JOIN ranking_owners o ON o.ranking_id = r.id
@@ -43,4 +46,18 @@ export function hasAccess(request: Request, slug: string, access: RankingAccess)
 export function accessCookie(request: Request, slug: string, token: string) {
   const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : '';
   return `${accessCookieName(slug)}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`;
+}
+
+export function votePinCookieName(slug: string) {
+  return `rankly-vote-pin-${slug}`;
+}
+
+export function hasVotePinAccess(request: Request, slug: string, access: RankingAccess) {
+  if (!access.votePinHash || access.isOwner) return true;
+  return Boolean(access.votePinToken) && cookieValue(request, votePinCookieName(slug)) === access.votePinToken;
+}
+
+export function votePinCookie(request: Request, slug: string, token: string) {
+  const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : '';
+  return `${votePinCookieName(slug)}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${secure}`;
 }

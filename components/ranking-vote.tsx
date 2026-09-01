@@ -20,6 +20,7 @@ import {
 } from '@dnd-kit/core';
 import { ArrowDown, ArrowDownToLine, ArrowUp, BarChart3, CheckCircle2, Clock3, Cloud, Copy, GripVertical, Info, LockKeyhole, LogIn, Pencil, RotateCcw, Send, Share2, Undo2, UserRound, Users, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { BrandHeader } from '@/components/brand-header';
 import { RankingAccessGate } from '@/components/ranking-access-gate';
 import { RankingSocial } from '@/components/ranking-social';
@@ -90,6 +91,8 @@ export function RankingVote({ slug }: { slug: string }) {
   const [liveMessage, setLiveMessage] = useState('');
   const [accessMode, setAccessMode] = useState<RankingAccessMode | null>(null);
   const [accessRevision, setAccessRevision] = useState(0);
+  const [votePin, setVotePin] = useState('');
+  const [unlockingPin, setUnlockingPin] = useState(false);
   const [now, setNow] = useState(Date.now());
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }), useSensor(KeyboardSensor));
   const collisionDetection = useCallback<CollisionDetection>((args) => {
@@ -244,6 +247,22 @@ export function RankingVote({ slug }: { slug: string }) {
     window.setTimeout(() => setCopied(false), 1600);
   }
 
+  async function unlockVotePin(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setUnlockingPin(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/rankings/${slug}/vote-pin`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pin: votePin }) });
+      const data = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(data.error ?? 'PIN ist nicht korrekt.');
+      setLoading(true);
+      setAccessRevision((value) => value + 1);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'PIN ist nicht korrekt.');
+      setUnlockingPin(false);
+    }
+  }
+
   async function submitVote() {
     if (!complete) return;
     setSubmitting(true);
@@ -277,6 +296,18 @@ export function RankingVote({ slug }: { slug: string }) {
         <h1 className="mt-2 text-5xl font-black tracking-[-0.055em]">{ranking.isOpen ? 'Die Frist ist abgelaufen.' : 'Diese Abstimmung ist geschlossen.'}</h1>
         <p className="mt-4 max-w-lg text-lg font-medium text-muted-foreground">Für „{ranking.title}“ können keine Stimmen mehr abgegeben oder geändert werden.</p>
         <a href={`/r/${slug}/results`} className="mt-8 inline-flex h-12 items-center gap-2 rounded-xl border-2 border-foreground bg-primary px-6 text-base font-black text-primary-foreground shadow-[3px_3px_0_var(--ink)]"><BarChart3 className="size-5" /> Ergebnis ansehen</a>
+      </section>
+    </main>
+  );
+
+  if (ranking.votePinRequired && !ranking.votePinUnlocked) return (
+    <main className="rankly-page min-h-screen"><BrandHeader />
+      <section className="mx-auto flex max-w-xl flex-col items-center px-5 py-20 text-center">
+        <span className="grid size-20 place-items-center rounded-[1.7rem] border-[3px] border-foreground bg-[#fff1a8] shadow-[6px_6px_0_var(--ink)]"><LockKeyhole className="size-10" /></span>
+        <p className="mt-8 text-sm font-black uppercase tracking-[0.15em] text-primary">PIN geschützt</p>
+        <h1 className="mt-2 text-5xl font-black tracking-[-0.055em]">PIN eingeben</h1>
+        <p className="mt-4 max-w-md text-lg font-medium text-muted-foreground">Für die Abstimmung „{ranking.title}“ brauchst du die PIN der erstellenden Person.</p>
+        <form onSubmit={unlockVotePin} className="mt-8 grid w-full gap-3 rounded-[1.5rem] border-[3px] border-foreground bg-card p-6 shadow-[7px_7px_0_var(--ink)]"><Input value={votePin} onChange={(event) => setVotePin(event.target.value.replace(/\D/g, '').slice(0, 8))} inputMode="numeric" pattern="[0-9]{4,8}" required minLength={4} maxLength={8} autoComplete="one-time-code" className="h-14 border-2 border-foreground text-center text-2xl font-black tracking-[0.35em]" placeholder="••••" /><Button type="submit" disabled={unlockingPin || votePin.length < 4} className="h-12 border-2 border-foreground font-black shadow-[3px_3px_0_var(--ink)]">{unlockingPin ? 'Wird geprüft…' : 'Abstimmung öffnen'} <LockKeyhole /></Button>{error && <p role="alert" className="text-sm font-bold text-[#8a1717]">{error}</p>}</form>
       </section>
     </main>
   );
@@ -337,7 +368,7 @@ export function RankingVote({ slug }: { slug: string }) {
         </DndContext>
 
         <section className="sticky bottom-4 z-20 mt-8 flex flex-col gap-4 rounded-[1.5rem] border-[3px] border-foreground bg-card/95 p-4 shadow-[7px_7px_0_var(--ink)] backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:p-5">
-          <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl border-2 border-foreground bg-[#d9cffd]"><UserRound className="size-5" /></span><div><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Du stimmst ab als</p><p className="font-black">{account?.user?.displayName ?? 'Angemeldete Person'}</p></div></div>
+          <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl border-2 border-foreground bg-[#d9cffd]"><UserRound className="size-5" /></span><div><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Du stimmst ab als</p><p className="font-black">{ranking.nameMode === 'anonymous' ? 'Anonym' : account?.user?.displayName ?? 'Angemeldete Person'}</p></div></div>
           <Button disabled={!complete || submitting} onClick={submitVote} className="h-12 border-2 border-foreground px-6 text-base font-black shadow-[3px_3px_0_var(--ink)]">{submitting ? 'Wird gespeichert…' : complete ? hasSavedVote ? 'Änderungen speichern' : 'Abstimmung senden' : `Noch ${ranking.items.length - assigned} einordnen`} <Send /></Button>
         </section>
         <RankingSocial slug={slug} items={ranking.items} />

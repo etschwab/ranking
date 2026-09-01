@@ -2,11 +2,11 @@
 /* oxlint-disable next/no-img-element -- uploaded images are already resized client-side data URLs */
 
 import { useState } from 'react';
-import { AlertOctagon, AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, BarChart3, Clock3, CopyPlus, Globe2, ImagePlus, KeyRound, LockKeyhole, Mail, Plus, Save, Trash2, Unlock, X } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, BarChart3, Clock3, CopyPlus, Eye, EyeOff, Globe2, ImagePlus, KeyRound, LockKeyhole, Mail, Plus, Save, ShieldCheck, Trash2, Unlock, UserRound, UserX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import type { OwnedRankingData, RankingAccessMode } from '@/db/rankings';
+import type { OwnedRankingData, RankingAccessMode, ResultsVisibility, VotingNameMode } from '@/db/rankings';
 
 type EditItem = { key: string; id?: string; label: string; imageData: string | null };
 type EditTier = { key: string; id?: string; label: string; color: string };
@@ -50,6 +50,11 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
   const [closesAt, setClosesAt] = useState(toDateTimeLocal(ranking.closesAt));
   const [accessMode, setAccessMode] = useState<RankingAccessMode>(ranking.accessMode);
   const [password, setPassword] = useState('');
+  const [nameMode, setNameMode] = useState<VotingNameMode>(ranking.nameMode);
+  const [oneVotePerUser, setOneVotePerUser] = useState(ranking.oneVotePerUser);
+  const [resultsVisibility, setResultsVisibility] = useState<ResultsVisibility>(ranking.resultsVisibility);
+  const [votePin, setVotePin] = useState('');
+  const [removeVotePin, setRemoveVotePin] = useState(false);
   const [items, setItems] = useState<EditItem[]>(ranking.items.map((item) => ({ key: item.id, id: item.id, label: item.label, imageData: item.imageData })));
   const [tiers, setTiers] = useState<EditTier[]>(ranking.tiers.map((tier) => ({ key: tier.id, id: tier.id, label: tier.label, color: tier.color })));
   const [saving, setSaving] = useState(false);
@@ -101,7 +106,7 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
       const response = await fetch(`/api/rankings/${ranking.slug}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title, description, isOpen, closesAt: closesAt ? new Date(closesAt).getTime() : null, accessMode, password, items: items.map(({ id, label, imageData }) => ({ id, label, imageData })), tiers: tiers.map(({ id, label, color }) => ({ id, label, color })) }),
+        body: JSON.stringify({ title, description, isOpen, closesAt: closesAt ? new Date(closesAt).getTime() : null, accessMode, password, nameMode, oneVotePerUser, resultsVisibility, votePin, removeVotePin, items: items.map(({ id, label, imageData }) => ({ id, label, imageData })), tiers: tiers.map(({ id, label, color }) => ({ id, label, color })) }),
       });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error ?? 'Speichern fehlgeschlagen.');
@@ -163,6 +168,16 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
           { mode: 'password', icon: KeyRound, title: 'Passwort', text: 'Geschützt' },
           { mode: 'invite', icon: Mail, title: 'Einladung', text: 'Geheimer Link' },
         ] as const).map((choice) => <button key={choice.mode} type="button" onClick={() => setAccessMode(choice.mode)} aria-pressed={accessMode === choice.mode} className={`rounded-xl border-2 p-3 text-left ${accessMode === choice.mode ? 'border-foreground bg-[#d9cffd] shadow-[3px_3px_0_var(--ink)]' : 'border-foreground/25 bg-background hover:border-foreground'}`}><choice.icon className="size-5" /><span className="mt-2 block font-black">{choice.title}</span><span className="text-xs font-semibold text-muted-foreground">{choice.text}</span></button>)}</div>{accessMode === 'password' && <label className="grid gap-2 text-sm font-black" htmlFor="edit-password">{ranking.accessMode === 'password' && ranking.hasPassword ? 'Neues Passwort (optional)' : 'Passwort'}<Input id="edit-password" type="password" required={ranking.accessMode !== 'password' || !ranking.hasPassword} minLength={6} maxLength={100} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="h-12 border-2 border-foreground px-4 font-bold" placeholder={ranking.accessMode === 'password' && ranking.hasPassword ? 'Leer lassen, um es beizubehalten' : 'Mindestens 6 Zeichen'} /><span className="font-semibold text-muted-foreground">Bei einer Änderung verlieren alte Freigaben automatisch ihre Gültigkeit.</span></label>}</fieldset>
+      </section>
+
+      <section className="rounded-[1.5rem] border-[3px] border-foreground bg-card p-5 shadow-[7px_7px_0_var(--ink)] sm:p-7">
+        <div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl border-2 border-foreground bg-[#fff1a8]"><ShieldCheck /></span><div><h2 className="text-2xl font-black">Abstimmung kontrollieren</h2><p className="text-sm font-semibold text-muted-foreground">Bestimme Identität, Mehrfachstimmen und wann Resultate sichtbar sind.</p></div></div>
+        <div className="mt-6 grid gap-6">
+          <fieldset className="grid gap-3"><legend className="text-sm font-black">Anzeige der Teilnehmer</legend><div className="grid gap-2 sm:grid-cols-2">{([{ value: 'required', icon: UserRound, title: 'Mit Namen', text: 'Profilname wird angezeigt' }, { value: 'anonymous', icon: UserX, title: 'Anonym', text: 'Name bleibt verborgen' }] as const).map((choice) => <button key={choice.value} type="button" onClick={() => setNameMode(choice.value)} aria-pressed={nameMode === choice.value} className={`rounded-xl border-2 p-4 text-left ${nameMode === choice.value ? 'border-foreground bg-[#d9cffd] shadow-[3px_3px_0_var(--ink)]' : 'border-foreground/25 bg-background'}`}><choice.icon className="size-5" /><span className="mt-2 block font-black">{choice.title}</span><span className="text-xs font-semibold text-muted-foreground">{choice.text}</span></button>)}</div></fieldset>
+          <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border-2 border-foreground bg-background p-4"><span><span className="block font-black">Nur eine Stimme pro Person</span><span className="text-sm font-semibold text-muted-foreground">Weitere Abstimmungen derselben Person aktualisieren ihre bestehende Stimme.</span></span><input type="checkbox" checked={oneVotePerUser} onChange={(event) => setOneVotePerUser(event.target.checked)} className="size-5 accent-primary" /></label>
+          <fieldset className="grid gap-3"><legend className="text-sm font-black">Ergebnisse anzeigen</legend><div className="grid gap-2 sm:grid-cols-3">{([{ value: 'always', icon: Eye, title: 'Sofort', text: 'Immer sichtbar' }, { value: 'after_vote', icon: UserRound, title: 'Nach eigener Stimme', text: 'Erst selbst abstimmen' }, { value: 'after_close', icon: EyeOff, title: 'Nach dem Ende', text: 'Bis dahin geheim' }] as const).map((choice) => <button key={choice.value} type="button" onClick={() => setResultsVisibility(choice.value)} aria-pressed={resultsVisibility === choice.value} className={`rounded-xl border-2 p-3 text-left ${resultsVisibility === choice.value ? 'border-foreground bg-[#d9f7e4] shadow-[3px_3px_0_var(--ink)]' : 'border-foreground/25 bg-background'}`}><choice.icon className="size-5" /><span className="mt-2 block font-black">{choice.title}</span><span className="text-xs font-semibold text-muted-foreground">{choice.text}</span></button>)}</div></fieldset>
+          <div className="grid gap-2"><label className="text-sm font-black" htmlFor="vote-pin">Abstimmungs-PIN <span className="font-semibold text-muted-foreground">(optional)</span></label><div className="flex gap-2"><Input id="vote-pin" value={votePin} onChange={(event) => { setVotePin(event.target.value.replace(/\D/g, '').slice(0, 8)); setRemoveVotePin(false); }} inputMode="numeric" pattern="[0-9]{4,8}" minLength={4} maxLength={8} className="h-12 border-2 border-foreground px-4 text-lg font-black tracking-widest" placeholder={ranking.votePinRequired && !removeVotePin ? 'Neue PIN (leer = behalten)' : '4–8 Ziffern'} />{ranking.votePinRequired && <Button type="button" variant="outline" onClick={() => { setRemoveVotePin((value) => !value); setVotePin(''); }} className={`h-12 border-2 font-black ${removeVotePin ? 'border-[#8a1717] bg-[#ffe2df] text-[#8a1717]' : 'border-foreground'}`}>{removeVotePin ? 'Wird entfernt' : 'PIN entfernen'}</Button>}</div><span className="text-sm font-semibold text-muted-foreground">Die PIN schützt nur die Stimmabgabe und kann separat vom Zugriffs-Passwort verwendet werden.</span></div>
+        </div>
       </section>
 
       <section className="rounded-[1.5rem] border-[3px] border-foreground bg-card p-5 shadow-[7px_7px_0_var(--ink)] sm:p-7">

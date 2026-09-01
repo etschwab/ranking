@@ -12,6 +12,11 @@ export const rankings = sqliteTable('rankings', {
   passwordHash: text('password_hash'),
   inviteToken: text('invite_token'),
   accessToken: text('access_token'),
+  nameMode: text('name_mode').notNull().default('required'),
+  oneVotePerUser: integer('one_vote_per_user', { mode: 'boolean' }).notNull().default(true),
+  resultsVisibility: text('results_visibility').notNull().default('always'),
+  votePinHash: text('vote_pin_hash'),
+  votePinToken: text('vote_pin_token'),
 });
 
 export const rankingTiers = sqliteTable('ranking_tiers', {
@@ -47,8 +52,9 @@ export const ballots = sqliteTable('ballots', {
   id: text('id').primaryKey(),
   rankingId: text('ranking_id').notNull().references(() => rankings.id, { onDelete: 'cascade' }),
   voterName: text('voter_name').notNull().default(''),
+  userId: text('user_id'),
   createdAt: integer('created_at').notNull(),
-}, (table) => [index('idx_ballots_ranking_created').on(table.rankingId, table.createdAt)]);
+}, (table) => [index('idx_ballots_ranking_created').on(table.rankingId, table.createdAt), index('idx_ballots_ranking_user').on(table.rankingId, table.userId)]);
 
 export const ballotEditTokens = sqliteTable('ballot_edit_tokens', {
   ballotId: text('ballot_id').primaryKey().references(() => ballots.id, { onDelete: 'cascade' }),
