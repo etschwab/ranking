@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input';
 import { BrandHeader } from '@/components/brand-header';
 import { RankingAccessGate } from '@/components/ranking-access-gate';
 import { RankingSocial } from '@/components/ranking-social';
+import { RankingShare } from '@/components/ranking-share';
 import type { RankingAccessMode, RankingData, RankingItem, RankingTier } from '@/db/rankings';
 
 function DraggableChip({ item, onUnassign, onMove, canMoveUp, canMoveDown }: { item: RankingItem; onUnassign: () => void; onMove: (direction: -1 | 1) => void; canMoveUp: boolean; canMoveDown: boolean }) {
@@ -372,6 +373,7 @@ export function RankingVote({ slug }: { slug: string }) {
           <Button disabled={!complete || submitting} onClick={submitVote} className="h-12 border-2 border-foreground px-6 text-base font-black shadow-[3px_3px_0_var(--ink)]">{submitting ? 'Wird gespeichert…' : complete ? hasSavedVote ? 'Änderungen speichern' : 'Abstimmung senden' : `Noch ${ranking.items.length - assigned} einordnen`} <Send /></Button>
         </section>
         <RankingSocial slug={slug} items={ranking.items} />
+        <RankingShare slug={ranking.slug} title={ranking.title} />
         {error && <p role="alert" className="mt-5 rounded-xl border-2 border-[#a31d1d] bg-[#ffe2df] px-4 py-3 font-bold text-[#8a1717]">{error}</p>}
         <div className="mt-5 flex flex-wrap gap-4">{scoreHistory.length > 0 && <button onClick={undo} className="flex items-center gap-2 text-sm font-black text-primary hover:underline"><Undo2 className="size-4" /> Letzte Änderung rückgängig</button>}{assigned > 0 && <button onClick={resetScores} className="flex items-center gap-2 text-sm font-black text-muted-foreground hover:text-foreground"><RotateCcw className="size-4" /> Alles zurücksetzen</button>}</div>
       </section>

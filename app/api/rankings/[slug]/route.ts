@@ -1,5 +1,5 @@
 import { getChatGPTUser } from '@/app/chatgpt-auth';
-import { deleteOwnedRanking, duplicateOwnedRanking, getRanking, hasUserVoted, updateOwnedRanking, type RankingAccessMode, type ResultsVisibility, type VotingNameMode } from '@/db/rankings';
+import { deleteOwnedRanking, duplicateOwnedRanking, getOwnedRanking, getRanking, hasUserVoted, isSlugAvailable, updateOwnedRanking, type RankingAccessMode, type ResultsVisibility, type VotingNameMode } from '@/db/rankings';
 import { getRankingAccess, hasAccess, hasVotePinAccess } from '@/db/ranking-access';
 import { hashPassword } from '@/lib/passwords';
 
@@ -25,7 +25,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const user = await getChatGPTUser();
     if (!user) return Response.json({ error: 'Bitte melde dich zuerst an.' }, { status: 401 });
     const { slug } = await params;
-    const body = await request.json() as { title?: unknown; description?: unknown; isOpen?: unknown; closesAt?: unknown; accessMode?: unknown; password?: unknown; nameMode?: unknown; oneVotePerUser?: unknown; resultsVisibility?: unknown; votePin?: unknown; removeVotePin?: unknown; items?: unknown; tiers?: unknown };
+    const body = await request.json() as { slug?: unknown; title?: unknown; description?: unknown; isOpen?: unknown; closesAt?: unknown; accessMode?: unknown; password?: unknown; nameMode?: unknown; oneVotePerUser?: unknown; resultsVisibility?: unknown; votePin?: unknown; removeVotePin?: unknown; previewImageData?: unknown; items?: unknown; tiers?: unknown };
+    const customSlug = typeof body.slug === 'string' ? body.slug.trim().toLowerCase() : slug;
     const title = typeof body.title === 'string' ? body.title.trim().slice(0, 100) : '';
     const description = typeof body.description === 'string' ? body.description.trim().slice(0, 280) : '';
     const closesAt = typeof body.closesAt === 'number' && Number.isFinite(body.closesAt) ? Math.trunc(body.closesAt) : null;
@@ -35,6 +36,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const oneVotePerUser = body.oneVotePerUser !== false;
     const resultsVisibility: ResultsVisibility = body.resultsVisibility === 'after_vote' || body.resultsVisibility === 'after_close' ? body.resultsVisibility : 'always';
     const votePin = typeof body.votePin === 'string' ? body.votePin.trim() : '';
+    const previewImageData = body.previewImageData === null ? null : typeof body.previewImageData === 'string' && /^data:image\/(?:webp|png|jpeg);base64,/.test(body.previewImageData) && body.previewImageData.length <= 500_000 ? body.previewImageData : undefined;
     const items = Array.isArray(body.items) ? body.items.flatMap((value) => {
       if (!value || typeof value !== 'object') return [];
       const item = value as { id?: unknown; label?: unknown; imageData?: unknown };
@@ -52,6 +54,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       return [{ id: typeof tier.id === 'string' ? tier.id : undefined, label, color }];
     }).slice(0, 8) : [];
     if (title.length < 3) return Response.json({ error: 'Bitte gib einen Titel mit mindestens 3 Zeichen ein.' }, { status: 400 });
+    if (!/^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])?$/.test(customSlug)) return Response.json({ error: 'Der Kurzlink muss 3 bis 32 Zeichen lang sein und darf nur Kleinbuchstaben, Zahlen und Bindestriche enthalten.' }, { status: 400 });
     if (items.length < 2) return Response.json({ error: 'Bitte behalte mindestens 2 Optionen.' }, { status: 400 });
     if (items.reduce((total, item) => total + (item.imageData?.length ?? 0), 0) > 3_600_000) return Response.json({ error: 'Die Bilder sind zusammen zu gross.' }, { status: 400 });
     if (tiers.length < 2) return Response.json({ error: 'Bitte verwende mindestens 2 Stufen.' }, { status: 400 });
@@ -70,9 +73,12 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const passwordHash = accessMode === 'password' && password ? await hashPassword(password) : undefined;
     const votePinHash = votePin ? await hashPassword(votePin) : body.removeVotePin === true ? null : undefined;
     const isOpen = typeof body.isOpen === 'boolean' ? body.isOpen : undefined;
-    const updated = await updateOwnedRanking(slug, user.userId, { title, description, isOpen, closesAt, accessMode, passwordHash, nameMode, oneVotePerUser, resultsVisibility, votePinHash, items, tiers });
+    const owned = await getOwnedRanking(slug, user.userId);
+    if (!owned) return Response.json({ error: 'Du darfst dieses Ranking nicht bearbeiten.' }, { status: 403 });
+    if (!await isSlugAvailable(customSlug, owned.id)) return Response.json({ error: 'Dieser Kurzlink ist bereits vergeben.' }, { status: 409 });
+    const updated = await updateOwnedRanking(slug, user.userId, { slug: customSlug, title, description, isOpen, closesAt, accessMode, passwordHash, nameMode, oneVotePerUser, resultsVisibility, votePinHash, previewImageData, items, tiers });
     if (!updated) return Response.json({ error: 'Du darfst dieses Ranking nicht bearbeiten.' }, { status: 403 });
-    return Response.json({ ok: true, slug });
+    return Response.json({ ok: true, slug: updated });
   } catch {
     return Response.json({ error: 'Das Ranking konnte nicht gespeichert werden.' }, { status: 500 });
   }

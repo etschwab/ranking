@@ -5,9 +5,9 @@ export type RankingItem = { id: string; label: string; imageData: string | null;
 export type RankingParticipant = { id: string; voterName: string; createdAt: number; scores: Record<string, { tier: number; rankPosition: number }> };
 export type VotingNameMode = 'required' | 'anonymous';
 export type ResultsVisibility = 'always' | 'after_vote' | 'after_close';
-export type RankingData = { id: string; slug: string; title: string; description: string; createdAt: number; isOpen: boolean; closesAt: number | null; nameMode: VotingNameMode; oneVotePerUser: boolean; resultsVisibility: ResultsVisibility; votePinRequired: boolean; votePinUnlocked: boolean; canViewResults: boolean; viewerHasVoted: boolean; ballotCount: number; tiers: RankingTier[]; items: RankingItem[] };
+export type RankingData = { id: string; slug: string; title: string; description: string; createdAt: number; isOpen: boolean; closesAt: number | null; nameMode: VotingNameMode; oneVotePerUser: boolean; resultsVisibility: ResultsVisibility; votePinRequired: boolean; hasPreviewImage: boolean; votePinUnlocked: boolean; canViewResults: boolean; viewerHasVoted: boolean; ballotCount: number; tiers: RankingTier[]; items: RankingItem[] };
 export type RankingAccessMode = 'public' | 'password' | 'invite';
-export type OwnedRankingData = RankingData & { accessMode: RankingAccessMode; hasPassword: boolean; inviteToken: string | null };
+export type OwnedRankingData = RankingData & { accessMode: RankingAccessMode; hasPassword: boolean; inviteToken: string | null; previewImageData: string | null };
 export type EditableRankingItem = { id?: string; label: string; imageData?: string | null };
 export type EditableRankingTier = { id?: string; label: string; color: string };
 
@@ -24,7 +24,7 @@ let schemaReady = false;
 export async function ensureSchema() {
   if (schemaReady) return;
   await db.batch([
-    db.prepare("CREATE TABLE IF NOT EXISTS rankings (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', created_at BIGINT NOT NULL, is_open INTEGER NOT NULL DEFAULT 1, closes_at BIGINT, access_mode TEXT NOT NULL DEFAULT 'public', password_hash TEXT, invite_token TEXT, access_token TEXT, name_mode TEXT NOT NULL DEFAULT 'required', one_vote_per_user INTEGER NOT NULL DEFAULT 1, results_visibility TEXT NOT NULL DEFAULT 'always', vote_pin_hash TEXT, vote_pin_token TEXT)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS rankings (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', created_at BIGINT NOT NULL, is_open INTEGER NOT NULL DEFAULT 1, closes_at BIGINT, access_mode TEXT NOT NULL DEFAULT 'public', password_hash TEXT, invite_token TEXT, access_token TEXT, name_mode TEXT NOT NULL DEFAULT 'required', one_vote_per_user INTEGER NOT NULL DEFAULT 1, results_visibility TEXT NOT NULL DEFAULT 'always', vote_pin_hash TEXT, vote_pin_token TEXT, preview_image_data TEXT)"),
     db.prepare('CREATE TABLE IF NOT EXISTS ranking_tiers (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, label TEXT NOT NULL, color TEXT NOT NULL, position INTEGER NOT NULL)'),
     db.prepare('CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, label TEXT NOT NULL, image_data TEXT, position INTEGER NOT NULL)'),
     db.prepare("CREATE TABLE IF NOT EXISTS ballots (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, voter_name TEXT NOT NULL DEFAULT '', user_id TEXT, created_at BIGINT NOT NULL)"),
@@ -56,6 +56,7 @@ export async function ensureSchema() {
     db.prepare("ALTER TABLE rankings ADD COLUMN IF NOT EXISTS results_visibility TEXT NOT NULL DEFAULT 'always'"),
     db.prepare('ALTER TABLE rankings ADD COLUMN IF NOT EXISTS vote_pin_hash TEXT'),
     db.prepare('ALTER TABLE rankings ADD COLUMN IF NOT EXISTS vote_pin_token TEXT'),
+    db.prepare('ALTER TABLE rankings ADD COLUMN IF NOT EXISTS preview_image_data TEXT'),
     db.prepare('ALTER TABLE items ADD COLUMN IF NOT EXISTS image_data TEXT'),
     db.prepare('ALTER TABLE ballots ADD COLUMN IF NOT EXISTS user_id TEXT'),
     db.prepare('ALTER TABLE scores ADD COLUMN IF NOT EXISTS rank_position INTEGER NOT NULL DEFAULT 0'),
@@ -90,7 +91,7 @@ export async function getRankingsForOwner(userId: string) {
 
 export async function getRanking(slug: string): Promise<RankingData | null> {
   await ensureSchema();
-  const ranking = await db.prepare('SELECT id, slug, title, description, created_at AS createdAt, is_open AS isOpen, closes_at AS closesAt, name_mode AS nameMode, one_vote_per_user AS oneVotePerUser, results_visibility AS resultsVisibility, vote_pin_hash AS votePinHash FROM rankings WHERE slug = ?').bind(slug).first<{ id: string; slug: string; title: string; description: string; createdAt: number; isOpen: number; closesAt: number | null; nameMode: VotingNameMode; oneVotePerUser: number; resultsVisibility: ResultsVisibility; votePinHash: string | null }>();
+  const ranking = await db.prepare('SELECT id, slug, title, description, created_at AS createdAt, is_open AS isOpen, closes_at AS closesAt, name_mode AS nameMode, one_vote_per_user AS oneVotePerUser, results_visibility AS resultsVisibility, vote_pin_hash AS votePinHash, CASE WHEN preview_image_data IS NULL THEN 0 ELSE 1 END AS hasPreviewImage FROM rankings WHERE slug = ?').bind(slug).first<{ id: string; slug: string; title: string; description: string; createdAt: number; isOpen: number; closesAt: number | null; nameMode: VotingNameMode; oneVotePerUser: number; resultsVisibility: ResultsVisibility; votePinHash: string | null; hasPreviewImage: number }>();
   if (!ranking) return null;
   const [tierRows, itemRows, ballotRow, scoreRows] = await Promise.all([
     db.prepare('SELECT id, label, color, position FROM ranking_tiers WHERE ranking_id = ? ORDER BY position').bind(ranking.id).all<{ id: string; label: string; color: string; position: number }>(),
@@ -114,6 +115,7 @@ export async function getRanking(slug: string): Promise<RankingData | null> {
     closesAt: ranking.closesAt === null ? null : Number(ranking.closesAt),
     oneVotePerUser: Boolean(ranking.oneVotePerUser),
     votePinRequired: Boolean(ranking.votePinHash),
+    hasPreviewImage: Boolean(ranking.hasPreviewImage),
     votePinUnlocked: !ranking.votePinHash,
     canViewResults: true,
     viewerHasVoted: false,
@@ -128,10 +130,10 @@ export async function getRanking(slug: string): Promise<RankingData | null> {
 
 export async function getOwnedRanking(slug: string, userId: string): Promise<OwnedRankingData | null> {
   await ensureSchema();
-  const owned = await db.prepare(`SELECT r.id, r.access_mode AS accessMode, r.password_hash AS passwordHash, r.invite_token AS inviteToken FROM rankings r JOIN ranking_owners o ON o.ranking_id = r.id WHERE r.slug = ? AND o.user_id = ?`).bind(slug, userId).first<{ id: string; accessMode: RankingAccessMode; passwordHash: string | null; inviteToken: string | null }>();
+  const owned = await db.prepare(`SELECT r.id, r.access_mode AS accessMode, r.password_hash AS passwordHash, r.invite_token AS inviteToken, r.preview_image_data AS previewImageData FROM rankings r JOIN ranking_owners o ON o.ranking_id = r.id WHERE r.slug = ? AND o.user_id = ?`).bind(slug, userId).first<{ id: string; accessMode: RankingAccessMode; passwordHash: string | null; inviteToken: string | null; previewImageData: string | null }>();
   if (!owned) return null;
   const ranking = await getRanking(slug);
-  return ranking ? { ...ranking, accessMode: owned.accessMode, hasPassword: Boolean(owned.passwordHash), inviteToken: owned.inviteToken } : null;
+  return ranking ? { ...ranking, accessMode: owned.accessMode, hasPassword: Boolean(owned.passwordHash), inviteToken: owned.inviteToken, previewImageData: owned.previewImageData } : null;
 }
 
 export async function getRankingParticipants(rankingId: string): Promise<RankingParticipant[]> {
@@ -159,9 +161,9 @@ export async function hasUserVoted(rankingId: string, userId?: string) {
   return Boolean(ballot);
 }
 
-export async function updateOwnedRanking(slug: string, userId: string, input: { title: string; description: string; isOpen?: boolean; closesAt: number | null; accessMode: RankingAccessMode; passwordHash?: string; nameMode: VotingNameMode; oneVotePerUser: boolean; resultsVisibility: ResultsVisibility; votePinHash?: string | null; items: EditableRankingItem[]; tiers: EditableRankingTier[] }) {
+export async function updateOwnedRanking(slug: string, userId: string, input: { slug: string; title: string; description: string; isOpen?: boolean; closesAt: number | null; accessMode: RankingAccessMode; passwordHash?: string; nameMode: VotingNameMode; oneVotePerUser: boolean; resultsVisibility: ResultsVisibility; votePinHash?: string | null; previewImageData?: string | null; items: EditableRankingItem[]; tiers: EditableRankingTier[] }) {
   await ensureSchema();
-  const ranking = await db.prepare(`SELECT r.id, r.is_open AS isOpen, r.access_mode AS accessMode, r.password_hash AS passwordHash, r.invite_token AS inviteToken, r.access_token AS accessToken, r.vote_pin_hash AS votePinHash, r.vote_pin_token AS votePinToken FROM rankings r JOIN ranking_owners o ON o.ranking_id = r.id WHERE r.slug = ? AND o.user_id = ?`).bind(slug, userId).first<{ id: string; isOpen: number; accessMode: RankingAccessMode; passwordHash: string | null; inviteToken: string | null; accessToken: string | null; votePinHash: string | null; votePinToken: string | null }>();
+  const ranking = await db.prepare(`SELECT r.id, r.is_open AS isOpen, r.access_mode AS accessMode, r.password_hash AS passwordHash, r.invite_token AS inviteToken, r.access_token AS accessToken, r.vote_pin_hash AS votePinHash, r.vote_pin_token AS votePinToken, r.preview_image_data AS previewImageData FROM rankings r JOIN ranking_owners o ON o.ranking_id = r.id WHERE r.slug = ? AND o.user_id = ?`).bind(slug, userId).first<{ id: string; isOpen: number; accessMode: RankingAccessMode; passwordHash: string | null; inviteToken: string | null; accessToken: string | null; votePinHash: string | null; votePinToken: string | null; previewImageData: string | null }>();
   if (!ranking) return false;
 
   const [existingItems, existingTiers] = await Promise.all([
@@ -195,9 +197,10 @@ export async function updateOwnedRanking(slug: string, userId: string, input: { 
   const accessToken = input.accessMode === 'public' ? null : (modeChanged || passwordChanged ? createSecret() : ranking.accessToken ?? createSecret());
   const votePinHash = input.votePinHash === undefined ? ranking.votePinHash : input.votePinHash;
   const votePinToken = votePinHash ? (input.votePinHash !== undefined ? createSecret() : ranking.votePinToken ?? createSecret()) : null;
+  const previewImageData = input.previewImageData === undefined ? ranking.previewImageData : input.previewImageData;
 
   await db.batch([
-    db.prepare('UPDATE rankings SET title = ?, description = ?, is_open = ?, closes_at = ?, access_mode = ?, password_hash = ?, invite_token = ?, access_token = ?, name_mode = ?, one_vote_per_user = ?, results_visibility = ?, vote_pin_hash = ?, vote_pin_token = ? WHERE id = ?').bind(input.title, input.description, (input.isOpen ?? Boolean(ranking.isOpen)) ? 1 : 0, input.closesAt, input.accessMode, passwordHash, inviteToken, accessToken, input.nameMode, input.oneVotePerUser ? 1 : 0, input.resultsVisibility, votePinHash, votePinToken, ranking.id),
+    db.prepare('UPDATE rankings SET slug = ?, title = ?, description = ?, is_open = ?, closes_at = ?, access_mode = ?, password_hash = ?, invite_token = ?, access_token = ?, name_mode = ?, one_vote_per_user = ?, results_visibility = ?, vote_pin_hash = ?, vote_pin_token = ?, preview_image_data = ? WHERE id = ?').bind(input.slug, input.title, input.description, (input.isOpen ?? Boolean(ranking.isOpen)) ? 1 : 0, input.closesAt, input.accessMode, passwordHash, inviteToken, accessToken, input.nameMode, input.oneVotePerUser ? 1 : 0, input.resultsVisibility, votePinHash, votePinToken, previewImageData, ranking.id),
     deleteScores,
     deleteItems,
     ...(remapScores ? [remapScores] : []),
@@ -206,7 +209,18 @@ export async function updateOwnedRanking(slug: string, userId: string, input: { 
     ...tierUpdates.map((tier) => tierIds.has(tier.id) ? db.prepare('UPDATE ranking_tiers SET label = ?, color = ?, position = ? WHERE id = ?').bind(tier.label, tier.color, tier.position, tier.id) : db.prepare('INSERT INTO ranking_tiers (id, ranking_id, label, color, position) VALUES (?, ?, ?, ?, ?)').bind(tier.id, ranking.id, tier.label, tier.color, tier.position)),
     ...input.items.map((item, position) => item.id && itemIds.has(item.id) ? db.prepare('UPDATE items SET label = ?, image_data = ?, position = ? WHERE id = ? AND ranking_id = ?').bind(item.label, item.imageData ?? null, position, item.id, ranking.id) : db.prepare('INSERT INTO items (id, ranking_id, label, image_data, position) VALUES (?, ?, ?, ?, ?)').bind(crypto.randomUUID(), ranking.id, item.label, item.imageData ?? null, position)),
   ]);
-  return true;
+  return input.slug;
+}
+
+export async function isSlugAvailable(slug: string, currentRankingId?: string) {
+  await ensureSchema();
+  const row = await db.prepare('SELECT id FROM rankings WHERE slug = ?').bind(slug).first<{ id: string }>();
+  return !row || row.id === currentRankingId;
+}
+
+export async function getRankingPreviewImage(slug: string) {
+  await ensureSchema();
+  return db.prepare('SELECT preview_image_data AS previewImageData FROM rankings WHERE slug = ?').bind(slug).first<{ previewImageData: string | null }>();
 }
 
 export async function deleteOwnedRanking(slug: string, userId: string, confirmationTitle: string) {
@@ -230,7 +244,7 @@ export async function deleteOwnedRanking(slug: string, userId: string, confirmat
 
 export async function duplicateOwnedRanking(slug: string, userId: string, email: string) {
   await ensureSchema();
-  const source = await db.prepare('SELECT r.id, r.title, r.description, r.access_mode AS accessMode, r.password_hash AS passwordHash, r.name_mode AS nameMode, r.one_vote_per_user AS oneVotePerUser, r.results_visibility AS resultsVisibility, r.vote_pin_hash AS votePinHash FROM rankings r JOIN ranking_owners o ON o.ranking_id = r.id WHERE r.slug = ? AND o.user_id = ?').bind(slug, userId).first<{ id: string; title: string; description: string; accessMode: RankingAccessMode; passwordHash: string | null; nameMode: VotingNameMode; oneVotePerUser: number; resultsVisibility: ResultsVisibility; votePinHash: string | null }>();
+  const source = await db.prepare('SELECT r.id, r.title, r.description, r.access_mode AS accessMode, r.password_hash AS passwordHash, r.name_mode AS nameMode, r.one_vote_per_user AS oneVotePerUser, r.results_visibility AS resultsVisibility, r.vote_pin_hash AS votePinHash, r.preview_image_data AS previewImageData FROM rankings r JOIN ranking_owners o ON o.ranking_id = r.id WHERE r.slug = ? AND o.user_id = ?').bind(slug, userId).first<{ id: string; title: string; description: string; accessMode: RankingAccessMode; passwordHash: string | null; nameMode: VotingNameMode; oneVotePerUser: number; resultsVisibility: ResultsVisibility; votePinHash: string | null; previewImageData: string | null }>();
   if (!source) return null;
   const [sourceItems, sourceTiers] = await Promise.all([
     db.prepare('SELECT label, image_data AS imageData FROM items WHERE ranking_id = ? ORDER BY position').bind(source.id).all<{ label: string; imageData: string | null }>(),
@@ -242,7 +256,7 @@ export async function duplicateOwnedRanking(slug: string, userId: string, email:
   const accessToken = source.accessMode === 'public' ? null : createSecret();
   const votePinToken = source.votePinHash ? createSecret() : null;
   await db.batch([
-    db.prepare('INSERT INTO rankings (id, slug, title, description, created_at, is_open, closes_at, access_mode, password_hash, invite_token, access_token, name_mode, one_vote_per_user, results_visibility, vote_pin_hash, vote_pin_token) VALUES (?, ?, ?, ?, ?, 1, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(rankingId, duplicateSlug, `${source.title} (Kopie)`.slice(0, 100), source.description, Date.now(), source.accessMode, source.passwordHash, inviteToken, accessToken, source.nameMode, source.oneVotePerUser, source.resultsVisibility, source.votePinHash, votePinToken),
+    db.prepare('INSERT INTO rankings (id, slug, title, description, created_at, is_open, closes_at, access_mode, password_hash, invite_token, access_token, name_mode, one_vote_per_user, results_visibility, vote_pin_hash, vote_pin_token, preview_image_data) VALUES (?, ?, ?, ?, ?, 1, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(rankingId, duplicateSlug, `${source.title} (Kopie)`.slice(0, 100), source.description, Date.now(), source.accessMode, source.passwordHash, inviteToken, accessToken, source.nameMode, source.oneVotePerUser, source.resultsVisibility, source.votePinHash, votePinToken, source.previewImageData),
     db.prepare('INSERT INTO ranking_owners (ranking_id, user_id, email) VALUES (?, ?, ?)').bind(rankingId, userId, email),
     ...sourceTiers.results.map((tier, position) => db.prepare('INSERT INTO ranking_tiers (id, ranking_id, label, color, position) VALUES (?, ?, ?, ?, ?)').bind(crypto.randomUUID(), rankingId, tier.label, tier.color, position)),
     ...sourceItems.results.map((item, position) => db.prepare('INSERT INTO items (id, ranking_id, label, image_data, position) VALUES (?, ?, ?, ?, ?)').bind(crypto.randomUUID(), rankingId, item.label, item.imageData, position)),

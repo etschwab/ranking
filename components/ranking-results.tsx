@@ -7,6 +7,7 @@ import { BrandHeader } from '@/components/brand-header';
 import { Button } from '@/components/ui/button';
 import { RankingAccessGate } from '@/components/ranking-access-gate';
 import { RankingSocial } from '@/components/ranking-social';
+import { RankingShare } from '@/components/ranking-share';
 import type { RankingAccessMode, RankingData, RankingItem, RankingParticipant, RankingTier } from '@/db/rankings';
 
 function resultTier(item: RankingItem, tiers: RankingTier[]) {
@@ -244,6 +245,7 @@ export function RankingResults({ slug }: { slug: string }) {
           </>
         )}
         <RankingSocial slug={slug} items={ranking.items} />
+        <RankingShare slug={ranking.slug} title={ranking.title} />
         {error && <p role="alert" className="mt-5 rounded-xl border-2 border-[#a31d1d] bg-[#ffe2df] px-4 py-3 font-bold text-[#8a1717]">{error}</p>}
       </section>
     </main>

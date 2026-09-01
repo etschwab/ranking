@@ -2,7 +2,7 @@
 /* oxlint-disable next/no-img-element -- uploaded images are already resized client-side data URLs */
 
 import { useState } from 'react';
-import { AlertOctagon, AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, BarChart3, Clock3, CopyPlus, Eye, EyeOff, Globe2, ImagePlus, KeyRound, LockKeyhole, Mail, Plus, Save, ShieldCheck, Trash2, Unlock, UserRound, UserX, X } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, BarChart3, Clock3, CopyPlus, Eye, EyeOff, Globe2, ImagePlus, KeyRound, Link2, LockKeyhole, Mail, Plus, Save, Share2, ShieldCheck, Trash2, Unlock, UserRound, UserX, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -36,6 +36,33 @@ function resizeImage(file: File) {
   });
 }
 
+function resizePreviewImage(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    if (file.size > 10_000_000) { reject(new Error('Das Vorschaubild darf höchstens 10 MB gross sein.')); return; }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Das Vorschaubild konnte nicht gelesen werden.'));
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') { reject(new Error('Das Vorschaubild konnte nicht gelesen werden.')); return; }
+      const image = new Image();
+      image.onerror = () => reject(new Error('Dieses Bildformat wird nicht unterstützt.'));
+      image.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1200;
+        canvas.height = 630;
+        const scale = Math.max(canvas.width / image.width, canvas.height / image.height);
+        const width = image.width * scale;
+        const height = image.height * scale;
+        canvas.getContext('2d')?.drawImage(image, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
+        const data = canvas.toDataURL('image/webp', 0.72);
+        if (data.length > 500_000) reject(new Error('Das Vorschaubild ist nach dem Verkleinern noch zu gross.'));
+        else resolve(data);
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function toDateTimeLocal(timestamp: number | null) {
   if (!timestamp) return '';
   const date = new Date(timestamp);
@@ -45,6 +72,7 @@ function toDateTimeLocal(timestamp: number | null) {
 
 export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
   const [title, setTitle] = useState(ranking.title);
+  const [customSlug, setCustomSlug] = useState(ranking.slug);
   const [description, setDescription] = useState(ranking.description);
   const [isOpen, setIsOpen] = useState(ranking.isOpen);
   const [closesAt, setClosesAt] = useState(toDateTimeLocal(ranking.closesAt));
@@ -55,6 +83,7 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
   const [resultsVisibility, setResultsVisibility] = useState<ResultsVisibility>(ranking.resultsVisibility);
   const [votePin, setVotePin] = useState('');
   const [removeVotePin, setRemoveVotePin] = useState(false);
+  const [previewImageData, setPreviewImageData] = useState<string | null>(ranking.previewImageData);
   const [items, setItems] = useState<EditItem[]>(ranking.items.map((item) => ({ key: item.id, id: item.id, label: item.label, imageData: item.imageData })));
   const [tiers, setTiers] = useState<EditTier[]>(ranking.tiers.map((tier) => ({ key: tier.id, id: tier.id, label: tier.label, color: tier.color })));
   const [saving, setSaving] = useState(false);
@@ -98,6 +127,13 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Bild konnte nicht verarbeitet werden.'); }
   }
 
+  async function choosePreviewImage(file?: File) {
+    if (!file) return;
+    setError('');
+    try { setPreviewImageData(await resizePreviewImage(file)); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Vorschaubild konnte nicht verarbeitet werden.'); }
+  }
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
@@ -106,11 +142,11 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
       const response = await fetch(`/api/rankings/${ranking.slug}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title, description, isOpen, closesAt: closesAt ? new Date(closesAt).getTime() : null, accessMode, password, nameMode, oneVotePerUser, resultsVisibility, votePin, removeVotePin, items: items.map(({ id, label, imageData }) => ({ id, label, imageData })), tiers: tiers.map(({ id, label, color }) => ({ id, label, color })) }),
+        body: JSON.stringify({ slug: customSlug, title, description, isOpen, closesAt: closesAt ? new Date(closesAt).getTime() : null, accessMode, password, nameMode, oneVotePerUser, resultsVisibility, votePin, removeVotePin, previewImageData, items: items.map(({ id, label, imageData }) => ({ id, label, imageData })), tiers: tiers.map(({ id, label, color }) => ({ id, label, color })) }),
       });
-      const data = await response.json() as { error?: string };
+      const data = await response.json() as { error?: string; slug?: string };
       if (!response.ok) throw new Error(data.error ?? 'Speichern fehlgeschlagen.');
-      window.location.href = `/r/${ranking.slug}/results`;
+      window.location.href = `/r/${data.slug ?? ranking.slug}/results`;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Speichern fehlgeschlagen.');
       setSaving(false);
@@ -168,6 +204,14 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
           { mode: 'password', icon: KeyRound, title: 'Passwort', text: 'Geschützt' },
           { mode: 'invite', icon: Mail, title: 'Einladung', text: 'Geheimer Link' },
         ] as const).map((choice) => <button key={choice.mode} type="button" onClick={() => setAccessMode(choice.mode)} aria-pressed={accessMode === choice.mode} className={`rounded-xl border-2 p-3 text-left ${accessMode === choice.mode ? 'border-foreground bg-[#d9cffd] shadow-[3px_3px_0_var(--ink)]' : 'border-foreground/25 bg-background hover:border-foreground'}`}><choice.icon className="size-5" /><span className="mt-2 block font-black">{choice.title}</span><span className="text-xs font-semibold text-muted-foreground">{choice.text}</span></button>)}</div>{accessMode === 'password' && <label className="grid gap-2 text-sm font-black" htmlFor="edit-password">{ranking.accessMode === 'password' && ranking.hasPassword ? 'Neues Passwort (optional)' : 'Passwort'}<Input id="edit-password" type="password" required={ranking.accessMode !== 'password' || !ranking.hasPassword} minLength={6} maxLength={100} autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} className="h-12 border-2 border-foreground px-4 font-bold" placeholder={ranking.accessMode === 'password' && ranking.hasPassword ? 'Leer lassen, um es beizubehalten' : 'Mindestens 6 Zeichen'} /><span className="font-semibold text-muted-foreground">Bei einer Änderung verlieren alte Freigaben automatisch ihre Gültigkeit.</span></label>}</fieldset>
+      </section>
+
+      <section className="rounded-[1.5rem] border-[3px] border-foreground bg-card p-5 shadow-[7px_7px_0_var(--ink)] sm:p-7">
+        <div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-xl border-2 border-foreground bg-[#d9cffd]"><Share2 /></span><div><h2 className="text-2xl font-black">Teilen & Vorschau</h2><p className="text-sm font-semibold text-muted-foreground">Ein kurzer eigener Link und ein Bild für Messenger und soziale Netzwerke.</p></div></div>
+        <div className="mt-6 grid gap-6">
+          <label className="grid gap-2 text-sm font-black" htmlFor="custom-slug">Kurzlink<span className="flex h-12 items-center overflow-hidden rounded-xl border-2 border-foreground bg-background"><span className="hidden h-full items-center border-r-2 border-foreground bg-muted px-3 font-semibold text-muted-foreground sm:flex">rankly.etienneschwab.ch/r/</span><Link2 className="ml-3 size-5 shrink-0 text-muted-foreground sm:hidden" /><input id="custom-slug" required minLength={3} maxLength={32} pattern="[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])?" value={customSlug} onChange={(event) => setCustomSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 32))} className="h-full min-w-0 flex-1 bg-transparent px-3 font-black outline-none" /></span><span className="font-semibold text-muted-foreground">3–32 Zeichen: Kleinbuchstaben, Zahlen und Bindestriche.</span></label>
+          <div className="grid gap-3"><p className="text-sm font-black">Individuelles Vorschaubild</p>{previewImageData ? <div className="relative overflow-hidden rounded-xl border-[3px] border-foreground"><img src={previewImageData} alt="Vorschau beim Teilen" className="aspect-[1200/630] w-full object-cover" /><button type="button" onClick={() => setPreviewImageData(null)} className="absolute right-3 top-3 inline-flex h-10 items-center gap-2 rounded-lg border-2 border-foreground bg-card px-3 text-sm font-black shadow-[2px_2px_0_var(--ink)]"><Trash2 className="size-4" /> Entfernen</button></div> : <label className="grid cursor-pointer place-items-center gap-2 rounded-xl border-2 border-dashed border-foreground bg-muted/50 p-8 text-center"><ImagePlus className="size-8" /><span className="font-black">Bild auswählen</span><span className="text-sm font-semibold text-muted-foreground">Wird automatisch auf 1200 × 630 zugeschnitten.</span><input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(event) => void choosePreviewImage(event.target.files?.[0])} /></label>}</div>
+        </div>
       </section>
 
       <section className="rounded-[1.5rem] border-[3px] border-foreground bg-card p-5 shadow-[7px_7px_0_var(--ink)] sm:p-7">

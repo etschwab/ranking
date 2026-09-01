@@ -17,6 +17,7 @@ export const rankings = sqliteTable('rankings', {
   resultsVisibility: text('results_visibility').notNull().default('always'),
   votePinHash: text('vote_pin_hash'),
   votePinToken: text('vote_pin_token'),
+  previewImageData: text('preview_image_data'),
 });
 
 export const rankingTiers = sqliteTable('ranking_tiers', {

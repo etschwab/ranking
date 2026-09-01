@@ -1,0 +1,1 @@
+ALTER TABLE `rankings` ADD `preview_image_data` text;
