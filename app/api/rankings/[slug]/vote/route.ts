@@ -43,7 +43,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     if (!hasAccess(request, slug, access)) return Response.json({ error: 'Dieses Ranking ist privat.', accessMode: access.accessMode }, { status: 403 });
     const ranking = await getRanking(slug);
     if (!ranking) return Response.json({ error: 'Ranking nicht gefunden.' }, { status: 404 });
-    if (ranking.closesAt !== null && Date.now() >= ranking.closesAt) {
+    if (!ranking.isOpen || (ranking.closesAt !== null && Date.now() >= ranking.closesAt)) {
       return Response.json({ error: 'Diese Abstimmung ist bereits geschlossen.' }, { status: 409 });
     }
     const body = await request.json() as { scores?: unknown; editToken?: unknown };

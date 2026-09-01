@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertOctagon, AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, BarChart3, Clock3, Globe2, KeyRound, Mail, Plus, Save, Trash2, X } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, ArrowDown, ArrowLeft, ArrowUp, BarChart3, Clock3, CopyPlus, Globe2, KeyRound, LockKeyhole, Mail, Plus, Save, Trash2, Unlock, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,6 +19,7 @@ function toDateTimeLocal(timestamp: number | null) {
 export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
   const [title, setTitle] = useState(ranking.title);
   const [description, setDescription] = useState(ranking.description);
+  const [isOpen, setIsOpen] = useState(ranking.isOpen);
   const [closesAt, setClosesAt] = useState(toDateTimeLocal(ranking.closesAt));
   const [accessMode, setAccessMode] = useState<RankingAccessMode>(ranking.accessMode);
   const [password, setPassword] = useState('');
@@ -27,6 +28,7 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmationTitle, setConfirmationTitle] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   const [error, setError] = useState('');
 
   function updateItem(key: string, label: string) {
@@ -56,7 +58,7 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
       const response = await fetch(`/api/rankings/${ranking.slug}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ title, description, closesAt: closesAt ? new Date(closesAt).getTime() : null, accessMode, password, items: items.map(({ id, label }) => ({ id, label })) }),
+        body: JSON.stringify({ title, description, isOpen, closesAt: closesAt ? new Date(closesAt).getTime() : null, accessMode, password, items: items.map(({ id, label }) => ({ id, label })) }),
       });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error ?? 'Speichern fehlgeschlagen.');
@@ -64,6 +66,20 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Speichern fehlgeschlagen.');
       setSaving(false);
+    }
+  }
+
+  async function duplicateRanking() {
+    setDuplicating(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/rankings/${ranking.slug}`, { method: 'POST' });
+      const data = await response.json() as { slug?: string; error?: string };
+      if (!response.ok || !data.slug) throw new Error(data.error ?? 'Duplizieren fehlgeschlagen.');
+      window.location.href = `/r/${data.slug}/edit`;
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Duplizieren fehlgeschlagen.');
+      setDuplicating(false);
     }
   }
 
@@ -92,6 +108,10 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
     <form onSubmit={submit} className="mt-10 grid gap-7">
       {ranking.ballotCount > 0 && <div className="flex gap-3 rounded-xl border-2 border-[#9a6513] bg-[#fff1a8] p-4 text-sm font-bold text-[#6f4708]"><AlertTriangle className="size-5 shrink-0" /><p>Dieses Ranking hat bereits {ranking.ballotCount} {ranking.ballotCount === 1 ? 'Stimme' : 'Stimmen'}. Gelöschte Optionen verlieren ihre Bewertungen; neue Optionen können bestehende Teilnehmer später ergänzen.</p></div>}
       <section className="grid gap-5 rounded-[1.5rem] border-[3px] border-foreground bg-card p-5 shadow-[7px_7px_0_var(--ink)] sm:p-7">
+        <div className={`flex flex-col justify-between gap-4 rounded-xl border-2 border-foreground p-4 sm:flex-row sm:items-center ${isOpen ? 'bg-[#d9f7e4]' : 'bg-[#ffe2df]'}`}>
+          <div className="flex items-center gap-3"><span className={`grid size-11 shrink-0 place-items-center rounded-xl border-2 border-foreground ${isOpen ? 'bg-[#80d6a8]' : 'bg-[#ff9b8e]'}`}>{isOpen ? <Unlock className="size-5" /> : <LockKeyhole className="size-5" />}</span><div><h2 className="font-black">Abstimmung {isOpen ? 'geöffnet' : 'geschlossen'}</h2><p className="text-sm font-semibold text-muted-foreground">{isOpen ? 'Neue und geänderte Stimmen werden angenommen.' : 'Bestehende Ergebnisse bleiben sichtbar, Stimmen sind gesperrt.'}</p></div></div>
+          <Button type="button" variant="outline" onClick={() => setIsOpen((value) => !value)} className="h-11 shrink-0 border-2 border-foreground font-black">{isOpen ? <LockKeyhole /> : <Unlock />} {isOpen ? 'Schließen' : 'Öffnen'}</Button>
+        </div>
         <label className="grid gap-2 text-sm font-black" htmlFor="edit-title">Titel<Input id="edit-title" required minLength={3} maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} className="h-12 border-2 border-foreground px-4 text-base font-bold" /></label>
         <label className="grid gap-2 text-sm font-black" htmlFor="edit-description">Beschreibung <span className="font-semibold text-muted-foreground">(optional)</span><Textarea id="edit-description" maxLength={280} value={description} onChange={(event) => setDescription(event.target.value)} className="min-h-24 border-2 border-foreground px-4 py-3 text-base" /></label>
         <label className="grid gap-2 text-sm font-black" htmlFor="edit-deadline">Abstimmungsfrist <span className="font-semibold text-muted-foreground">(optional)</span><span className="relative"><Clock3 className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" /><Input id="edit-deadline" type="datetime-local" value={closesAt} onChange={(event) => setClosesAt(event.target.value)} className="h-12 border-2 border-foreground pl-12 font-bold" /></span><span className="font-semibold text-muted-foreground">Leeren, um die Abstimmung wieder ohne Frist zu öffnen.</span></label>
@@ -106,6 +126,10 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
         <div className="flex items-end justify-between gap-4"><div><h2 className="text-2xl font-black">Optionen</h2><p className="mt-1 text-sm font-semibold text-muted-foreground">Umbenennen, sortieren oder neue hinzufügen.</p></div><span className="rounded-full border-2 border-foreground bg-[#d9cffd] px-3 py-1 text-sm font-black">{items.length}/30</span></div>
         <ol className="mt-6 grid gap-3">{items.map((item, index) => <li key={item.key} className="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-xl border-2 border-foreground bg-background p-2"><span className="grid size-9 place-items-center rounded-lg bg-muted text-sm font-black">{index + 1}</span><Input required maxLength={80} value={item.label} onChange={(event) => updateItem(item.key, event.target.value)} aria-label={`Option ${index + 1}`} className="h-10 border-0 bg-transparent px-2 font-bold shadow-none focus-visible:ring-0" /><div className="flex"><button type="button" onClick={() => moveItem(index, -1)} disabled={index === 0} className="grid size-9 place-items-center rounded-lg hover:bg-muted disabled:opacity-25" aria-label={`${item.label || `Option ${index + 1}`} nach oben`}><ArrowUp className="size-4" /></button><button type="button" onClick={() => moveItem(index, 1)} disabled={index === items.length - 1} className="grid size-9 place-items-center rounded-lg hover:bg-muted disabled:opacity-25" aria-label={`${item.label || `Option ${index + 1}`} nach unten`}><ArrowDown className="size-4" /></button><button type="button" onClick={() => setItems((current) => current.filter((candidate) => candidate.key !== item.key))} disabled={items.length <= 2} className="grid size-9 place-items-center rounded-lg text-[#9a2820] hover:bg-[#ffe2df] disabled:opacity-25" aria-label={`${item.label || `Option ${index + 1}`} entfernen`}><Trash2 className="size-4" /></button></div></li>)}</ol>
         <Button type="button" variant="outline" onClick={addItem} disabled={items.length >= 30} className="mt-4 h-11 border-2 border-dashed border-foreground font-black"><Plus /> Option hinzufügen</Button>
+      </section>
+
+      <section className="rounded-[1.5rem] border-[3px] border-foreground bg-card p-5 shadow-[6px_6px_0_var(--ink)] sm:p-7">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><div className="flex gap-3"><span className="grid size-11 shrink-0 place-items-center rounded-xl border-2 border-foreground bg-[#d9cffd]"><CopyPlus className="size-5" /></span><div><h2 className="text-xl font-black">Ranking duplizieren</h2><p className="mt-1 text-sm font-semibold text-muted-foreground">Erstellt eine geöffnete Kopie ohne Stimmen und ohne Einsendeschluss.</p></div></div><Button type="button" variant="outline" onClick={duplicateRanking} disabled={duplicating} className="h-11 border-2 border-foreground font-black"><CopyPlus /> {duplicating ? 'Wird dupliziert…' : 'Kopie erstellen'}</Button></div>
       </section>
 
       <section className="rounded-[1.5rem] border-[3px] border-[#8a1717] bg-[#fff7f5] p-5 shadow-[6px_6px_0_#8a1717] sm:p-7">

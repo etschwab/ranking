@@ -1,0 +1,1 @@
+ALTER TABLE `rankings` ADD `is_open` integer DEFAULT true NOT NULL;

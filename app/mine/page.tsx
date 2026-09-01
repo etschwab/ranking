@@ -77,7 +77,7 @@ export default async function MyRankingsPage() {
           <div className="mt-12 grid gap-5 md:grid-cols-2">
             {rankings.map((ranking, index) => {
               const closed =
-                ranking.closesAt !== null && Date.now() >= ranking.closesAt;
+                !ranking.isOpen || (ranking.closesAt !== null && Date.now() >= ranking.closesAt);
               const AccessIcon =
                 ranking.accessMode === "password"
                   ? KeyRound
@@ -116,7 +116,7 @@ export default async function MyRankingsPage() {
                         <Users className="size-4" /> {ranking.ballotCount}
                       </span>
                     </div>
-                    {ranking.closesAt && (
+                    {closed || ranking.closesAt ? (
                       <p
                         className={`mt-4 flex items-center gap-2 text-sm font-black ${closed ? "text-[#8a1717]" : "text-muted-foreground"}`}
                       >
@@ -126,10 +126,10 @@ export default async function MyRankingsPage() {
                           <Clock3 className="size-4" />
                         )}
                         {closed
-                          ? "Abstimmung geschlossen"
-                          : `Offen bis ${new Date(ranking.closesAt).toLocaleString("de-CH", { dateStyle: "medium", timeStyle: "short" })}`}
+                          ? ranking.isOpen ? "Einsendeschluss erreicht" : "Abstimmung geschlossen"
+                          : `Offen bis ${new Date(ranking.closesAt!).toLocaleString("de-CH", { dateStyle: "medium", timeStyle: "short" })}`}
                       </p>
-                    )}
+                    ) : null}
                     <p className="mt-3 flex items-center gap-2 text-sm font-black text-muted-foreground">
                       <AccessIcon className="size-4" />
                       {ranking.accessMode === "password"

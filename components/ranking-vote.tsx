@@ -174,7 +174,7 @@ export function RankingVote({ slug }: { slug: string }) {
   const complete = ranking ? assigned === ranking.items.length : false;
   const grouped = useMemo(() => new Map(tiers.map((tier) => [tier.score, ranking?.items.filter((item) => scores[item.id] === tier.score) ?? []])), [ranking, scores]);
   const activeItem = ranking?.items.find((item) => item.id === activeId);
-  const closed = ranking?.closesAt !== null && ranking?.closesAt !== undefined && now >= ranking.closesAt;
+  const closed = Boolean(ranking && (!ranking.isOpen || (ranking.closesAt !== null && now >= ranking.closesAt)));
 
   function remember(current: Record<string, number>) {
     setScoreHistory((history) => [...history.slice(-19), current]);
@@ -263,7 +263,7 @@ export function RankingVote({ slug }: { slug: string }) {
       <section className="mx-auto flex max-w-2xl flex-col items-center px-5 py-20 text-center">
         <span className="grid size-20 place-items-center rounded-[1.7rem] border-[3px] border-foreground bg-[#fff1a8] shadow-[6px_6px_0_var(--ink)]"><LockKeyhole className="size-10" /></span>
         <p className="mt-8 text-sm font-black uppercase tracking-[0.15em] text-primary">Abstimmung beendet</p>
-        <h1 className="mt-2 text-5xl font-black tracking-[-0.055em]">Die Frist ist abgelaufen.</h1>
+        <h1 className="mt-2 text-5xl font-black tracking-[-0.055em]">{ranking.isOpen ? 'Die Frist ist abgelaufen.' : 'Diese Abstimmung ist geschlossen.'}</h1>
         <p className="mt-4 max-w-lg text-lg font-medium text-muted-foreground">Für „{ranking.title}“ können keine Stimmen mehr abgegeben oder geändert werden.</p>
         <a href={`/r/${slug}/results`} className="mt-8 inline-flex h-12 items-center gap-2 rounded-xl border-2 border-foreground bg-primary px-6 text-base font-black text-primary-foreground shadow-[3px_3px_0_var(--ink)]"><BarChart3 className="size-5" /> Ergebnis ansehen</a>
       </section>

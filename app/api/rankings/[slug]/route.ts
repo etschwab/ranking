@@ -1,5 +1,5 @@
 import { getChatGPTUser } from '@/app/chatgpt-auth';
-import { deleteOwnedRanking, getRanking, updateOwnedRanking, type RankingAccessMode } from '@/db/rankings';
+import { deleteOwnedRanking, duplicateOwnedRanking, getRanking, updateOwnedRanking, type RankingAccessMode } from '@/db/rankings';
 import { getRankingAccess, hasAccess } from '@/db/ranking-access';
 import { hashPassword } from '@/lib/passwords';
 
@@ -21,7 +21,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const user = await getChatGPTUser();
     if (!user) return Response.json({ error: 'Bitte melde dich zuerst an.' }, { status: 401 });
     const { slug } = await params;
-    const body = await request.json() as { title?: unknown; description?: unknown; closesAt?: unknown; accessMode?: unknown; password?: unknown; items?: unknown };
+    const body = await request.json() as { title?: unknown; description?: unknown; isOpen?: unknown; closesAt?: unknown; accessMode?: unknown; password?: unknown; items?: unknown };
     const title = typeof body.title === 'string' ? body.title.trim().slice(0, 100) : '';
     const description = typeof body.description === 'string' ? body.description.trim().slice(0, 280) : '';
     const closesAt = typeof body.closesAt === 'number' && Number.isFinite(body.closesAt) ? Math.trunc(body.closesAt) : null;
@@ -46,11 +46,25 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       return Response.json({ error: 'Ungültige doppelte Option.' }, { status: 400 });
     }
     const passwordHash = accessMode === 'password' && password ? await hashPassword(password) : undefined;
-    const updated = await updateOwnedRanking(slug, user.userId, { title, description, closesAt, accessMode, passwordHash, items });
+    const isOpen = typeof body.isOpen === 'boolean' ? body.isOpen : undefined;
+    const updated = await updateOwnedRanking(slug, user.userId, { title, description, isOpen, closesAt, accessMode, passwordHash, items });
     if (!updated) return Response.json({ error: 'Du darfst dieses Ranking nicht bearbeiten.' }, { status: 403 });
     return Response.json({ ok: true, slug });
   } catch {
     return Response.json({ error: 'Das Ranking konnte nicht gespeichert werden.' }, { status: 500 });
+  }
+}
+
+export async function POST(_request: Request, { params }: RouteContext) {
+  try {
+    const user = await getChatGPTUser();
+    if (!user) return Response.json({ error: 'Bitte melde dich zuerst an.' }, { status: 401 });
+    const { slug } = await params;
+    const duplicateSlug = await duplicateOwnedRanking(slug, user.userId, user.email);
+    if (!duplicateSlug) return Response.json({ error: 'Du darfst dieses Ranking nicht duplizieren.' }, { status: 403 });
+    return Response.json({ slug: duplicateSlug }, { status: 201 });
+  } catch {
+    return Response.json({ error: 'Das Ranking konnte nicht dupliziert werden.' }, { status: 500 });
   }
 }
 

@@ -6,6 +6,7 @@ export const rankings = sqliteTable('rankings', {
   title: text('title').notNull(),
   description: text('description').notNull().default(''),
   createdAt: integer('created_at').notNull(),
+  isOpen: integer('is_open', { mode: 'boolean' }).notNull().default(true),
   closesAt: integer('closes_at'),
   accessMode: text('access_mode').notNull().default('public'),
   passwordHash: text('password_hash'),

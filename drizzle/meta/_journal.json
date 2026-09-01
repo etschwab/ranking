@@ -50,6 +50,13 @@
       "when": 1788200898896,
       "tag": "0006_broken_fabian_cortez",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788283648811,
+      "tag": "0007_good_whiplash",
+      "breakpoints": true
     }
   ]
 }
