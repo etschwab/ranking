@@ -37,7 +37,8 @@ export async function ensureSchema() {
     console.error('Failed to initialize session schema', error);
     throw new Error('schema-sessions');
   }
-  await db.batch([
+  try {
+    await db.batch([
     db.prepare("CREATE TABLE IF NOT EXISTS rankings (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', created_at BIGINT NOT NULL, is_open INTEGER NOT NULL DEFAULT 1, closes_at BIGINT, access_mode TEXT NOT NULL DEFAULT 'public', password_hash TEXT, invite_token TEXT, access_token TEXT, name_mode TEXT NOT NULL DEFAULT 'required', one_vote_per_user INTEGER NOT NULL DEFAULT 1, results_visibility TEXT NOT NULL DEFAULT 'always', vote_pin_hash TEXT, vote_pin_token TEXT, preview_image_data TEXT)"),
     db.prepare('CREATE TABLE IF NOT EXISTS ranking_tiers (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, label TEXT NOT NULL, color TEXT NOT NULL, position INTEGER NOT NULL)'),
     db.prepare('CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, label TEXT NOT NULL, image_data TEXT, position INTEGER NOT NULL)'),
@@ -57,12 +58,22 @@ export async function ensureSchema() {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_comments_ranking_created ON comments(ranking_id, created_at)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_reactions_target ON reactions(ranking_id, target_type, target_id)'),
     db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_reactions_unique ON reactions(ranking_id, target_type, target_id, user_id, emoji)'),
-  ]);
-  await db.batch([
-    db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id)'),
-    db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires_at)'),
-  ]);
-  await db.batch([
+    ]);
+  } catch (error) {
+    console.error('Failed to initialize base schema', error);
+    throw new Error('schema-base');
+  }
+  try {
+    await db.batch([
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id)'),
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires_at)'),
+    ]);
+  } catch (error) {
+    console.error('Failed to initialize session indexes', error);
+    throw new Error('schema-session-indexes');
+  }
+  try {
+    await db.batch([
     db.prepare('ALTER TABLE rankings ADD COLUMN IF NOT EXISTS is_open INTEGER NOT NULL DEFAULT 1'),
     db.prepare('ALTER TABLE rankings ADD COLUMN IF NOT EXISTS closes_at BIGINT'),
     db.prepare("ALTER TABLE rankings ADD COLUMN IF NOT EXISTS access_mode TEXT NOT NULL DEFAULT 'public'"),
@@ -85,14 +96,23 @@ export async function ensureSchema() {
     db.prepare('ALTER TABLE user_profiles ALTER COLUMN updated_at TYPE BIGINT'),
     db.prepare('ALTER TABLE comments ALTER COLUMN created_at TYPE BIGINT'),
     db.prepare('ALTER TABLE reactions ALTER COLUMN created_at TYPE BIGINT'),
-  ]);
-  await db.prepare(`
+    ]);
+  } catch (error) {
+    console.error('Failed to update schema', error);
+    throw new Error('schema-updates');
+  }
+  try {
+    await db.prepare(`
     INSERT INTO ranking_tiers (id, ranking_id, label, color, position)
     SELECT md5(r.id || '-tier-' || defaults.position::text), r.id, defaults.label, defaults.color, defaults.position
     FROM rankings r
     CROSS JOIN (VALUES (0, 'S', '#ff8b72'), (1, 'A', '#ffc56f'), (2, 'B', '#fff1a8'), (3, 'C', '#80d6a8'), (4, 'D', '#8dc5ff')) AS defaults(position, label, color)
     WHERE NOT EXISTS (SELECT 1 FROM ranking_tiers rt WHERE rt.ranking_id = r.id)
-  `).run();
+    `).run();
+  } catch (error) {
+    console.error('Failed to seed ranking tiers', error);
+    throw new Error('schema-tier-seed');
+  }
   schemaReady = true;
 }
 
