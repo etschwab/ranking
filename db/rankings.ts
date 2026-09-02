@@ -23,11 +23,13 @@ let schemaReady = false;
 
 export async function ensureSchema() {
   if (schemaReady) return;
+  // These two tables have a foreign-key dependency. Create them in a guaranteed
+  // order because the Postgres adapter may dispatch statements in a batch together.
+  await db.prepare('CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT, google_sub TEXT UNIQUE, display_name TEXT NOT NULL, created_at BIGINT NOT NULL)').run();
+  await db.prepare('CREATE TABLE IF NOT EXISTS auth_sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at BIGINT NOT NULL)').run();
   await db.batch([
     db.prepare("CREATE TABLE IF NOT EXISTS rankings (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', created_at BIGINT NOT NULL, is_open INTEGER NOT NULL DEFAULT 1, closes_at BIGINT, access_mode TEXT NOT NULL DEFAULT 'public', password_hash TEXT, invite_token TEXT, access_token TEXT, name_mode TEXT NOT NULL DEFAULT 'required', one_vote_per_user INTEGER NOT NULL DEFAULT 1, results_visibility TEXT NOT NULL DEFAULT 'always', vote_pin_hash TEXT, vote_pin_token TEXT, preview_image_data TEXT)"),
     db.prepare('CREATE TABLE IF NOT EXISTS ranking_tiers (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, label TEXT NOT NULL, color TEXT NOT NULL, position INTEGER NOT NULL)'),
-    db.prepare('CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT, google_sub TEXT UNIQUE, display_name TEXT NOT NULL, created_at BIGINT NOT NULL)'),
-    db.prepare('CREATE TABLE IF NOT EXISTS auth_sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at BIGINT NOT NULL)'),
     db.prepare('CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, label TEXT NOT NULL, image_data TEXT, position INTEGER NOT NULL)'),
     db.prepare("CREATE TABLE IF NOT EXISTS ballots (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, voter_name TEXT NOT NULL DEFAULT '', user_id TEXT, created_at BIGINT NOT NULL)"),
     db.prepare('CREATE TABLE IF NOT EXISTS ballot_edit_tokens (ballot_id TEXT PRIMARY KEY REFERENCES ballots(id) ON DELETE CASCADE, token TEXT NOT NULL UNIQUE)'),
@@ -37,8 +39,6 @@ export async function ensureSchema() {
     db.prepare('CREATE TABLE IF NOT EXISTS comments (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, user_id TEXT NOT NULL, author_name TEXT NOT NULL, body TEXT NOT NULL, created_at BIGINT NOT NULL)'),
     db.prepare("CREATE TABLE IF NOT EXISTS reactions (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, target_type TEXT NOT NULL CHECK(target_type IN ('item', 'comment')), target_id TEXT NOT NULL, user_id TEXT NOT NULL, emoji TEXT NOT NULL, created_at BIGINT NOT NULL)"),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_ranking_tiers_position ON ranking_tiers(ranking_id, position)'),
-    db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id)'),
-    db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires_at)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_items_ranking_position ON items(ranking_id, position)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_ballots_ranking_created ON ballots(ranking_id, created_at)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_ballots_ranking_user ON ballots(ranking_id, user_id)'),
@@ -47,6 +47,10 @@ export async function ensureSchema() {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_comments_ranking_created ON comments(ranking_id, created_at)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_reactions_target ON reactions(ranking_id, target_type, target_id)'),
     db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_reactions_unique ON reactions(ranking_id, target_type, target_id, user_id, emoji)'),
+  ]);
+  await db.batch([
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires_at)'),
   ]);
   await db.batch([
     db.prepare('ALTER TABLE rankings ADD COLUMN IF NOT EXISTS is_open INTEGER NOT NULL DEFAULT 1'),
