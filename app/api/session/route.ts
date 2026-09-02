@@ -7,6 +7,7 @@ function redirectToLogin(request: Request, returnTo: string, mode: string, error
 }
 
 export async function POST(request: Request) {
+  let failureReturnTo = '/';
   try {
   const form = await request.formData();
   const mode = String(form.get('mode') ?? 'login') === 'register' ? 'register' : 'login';
@@ -14,6 +15,7 @@ export async function POST(request: Request) {
   const password = String(form.get('password') ?? '');
   const displayName = String(form.get('displayName') ?? '').trim().slice(0, 50);
   const returnTo = safeReturnPath(String(form.get('returnTo') ?? '/'));
+  failureReturnTo = returnTo;
   if (!/^\S+@\S+\.\S+$/.test(email) || password.length < 8 || password.length > 100) {
     return redirectToLogin(request, returnTo, mode, 'Bitte gib eine gültige E-Mail-Adresse und ein Passwort mit mindestens 8 Zeichen ein.');
   }
@@ -33,7 +35,7 @@ export async function POST(request: Request) {
   return new Response(null, { status: 303, headers: { Location: new URL(returnTo, request.url).toString(), 'Set-Cookie': sessionCookie(token, new URL(request.url).protocol === 'https:') } });
   } catch (error) {
     console.error('Account request failed', error);
-    const stage = error instanceof Error && /^schema-[a-z0-9-]+$/.test(error.message) ? error.message : 'account-operation';
-    return Response.json({ error: 'Das Konto konnte gerade nicht geladen werden.' }, { status: 500, headers: { 'X-Rankly-Error-Stage': stage } });
+    const params = new URLSearchParams({ returnTo: failureReturnTo, error: 'Das Konto konnte gerade nicht geladen werden. Bitte versuche es erneut.' });
+    return Response.redirect(new URL(`/login?${params}`, request.url), 303);
   }
 }
