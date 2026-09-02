@@ -63,7 +63,6 @@ export async function ensureSchema() {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_ranking_tiers_position ON ranking_tiers(ranking_id, position)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_items_ranking_position ON items(ranking_id, position)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_ballots_ranking_created ON ballots(ranking_id, created_at)'),
-    db.prepare('CREATE INDEX IF NOT EXISTS idx_ballots_ranking_user ON ballots(ranking_id, user_id)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_scores_item ON scores(item_id)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_ranking_owners_user ON ranking_owners(user_id)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_comments_ranking_created ON comments(ranking_id, created_at)'),
@@ -112,6 +111,7 @@ export async function ensureSchema() {
     console.error('Failed to update schema', error);
     throw error;
   }
+  await db.prepare('CREATE INDEX IF NOT EXISTS idx_ballots_ranking_user ON ballots(ranking_id, user_id)').run();
   try {
     await db.prepare(`
     INSERT INTO ranking_tiers (id, ranking_id, label, color, position)
