@@ -1,14 +1,14 @@
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { getCurrentUser } from '@/app/auth';
 import { getUserProfile, saveUserProfile } from '@/db/profiles';
 
 export async function GET() {
-  const user = await getChatGPTUser();
+  const user = await getCurrentUser();
   if (!user) return Response.json({ error: 'Bitte melde dich zuerst an.' }, { status: 401 });
   return Response.json(await getUserProfile(user));
 }
 
 export async function PATCH(request: Request) {
-  const user = await getChatGPTUser();
+  const user = await getCurrentUser();
   if (!user) return Response.json({ error: 'Bitte melde dich zuerst an.' }, { status: 401 });
   const body = await request.json() as { displayName?: unknown };
   const displayName = typeof body.displayName === 'string' ? body.displayName.trim().slice(0, 50) : '';

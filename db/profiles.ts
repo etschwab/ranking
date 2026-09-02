@@ -1,13 +1,14 @@
-import type { ChatGPTUser } from '@/app/chatgpt-auth';
+import type { RanklyUser } from '@/app/auth';
 import { db } from '@/db/client';
 import { ensureSchema } from '@/db/rankings';
+import { updateAccountName } from '@/db/accounts';
 
 export type UserProfile = {
   displayName: string;
   email: string;
 };
 
-export async function getUserProfile(user: ChatGPTUser): Promise<UserProfile> {
+export async function getUserProfile(user: RanklyUser): Promise<UserProfile> {
   await ensureSchema();
   const profile = await db.prepare(
     'SELECT display_name AS displayName, email FROM user_profiles WHERE user_id = ?',
@@ -15,8 +16,9 @@ export async function getUserProfile(user: ChatGPTUser): Promise<UserProfile> {
   return profile ?? { displayName: user.displayName, email: user.email };
 }
 
-export async function saveUserProfile(user: ChatGPTUser, displayName: string): Promise<UserProfile> {
+export async function saveUserProfile(user: RanklyUser, displayName: string): Promise<UserProfile> {
   await ensureSchema();
+  await updateAccountName(user, displayName);
   await db.prepare(`
     INSERT INTO user_profiles (user_id, display_name, email, updated_at)
     VALUES (?, ?, ?, ?)

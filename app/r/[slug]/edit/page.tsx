@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { requireChatGPTUser } from '@/app/chatgpt-auth';
+import { requireUser } from '@/app/auth';
 import { BrandHeader } from '@/components/brand-header';
 import { RankingEditForm } from '@/components/ranking-edit-form';
 import { getOwnedRanking } from '@/db/rankings';
@@ -7,7 +7,7 @@ import { getOwnedRanking } from '@/db/rankings';
 export const dynamic = 'force-dynamic';
 
 async function EditRankingContent({ slug }: { slug: string }) {
-  const user = await requireChatGPTUser(`/r/${slug}/edit`);
+  const user = await requireUser(`/r/${slug}/edit`);
   const ranking = await getOwnedRanking(slug, user.userId);
   if (!ranking) notFound();
   return (

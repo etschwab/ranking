@@ -26,6 +26,8 @@ export async function ensureSchema() {
   await db.batch([
     db.prepare("CREATE TABLE IF NOT EXISTS rankings (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', created_at BIGINT NOT NULL, is_open INTEGER NOT NULL DEFAULT 1, closes_at BIGINT, access_mode TEXT NOT NULL DEFAULT 'public', password_hash TEXT, invite_token TEXT, access_token TEXT, name_mode TEXT NOT NULL DEFAULT 'required', one_vote_per_user INTEGER NOT NULL DEFAULT 1, results_visibility TEXT NOT NULL DEFAULT 'always', vote_pin_hash TEXT, vote_pin_token TEXT, preview_image_data TEXT)"),
     db.prepare('CREATE TABLE IF NOT EXISTS ranking_tiers (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, label TEXT NOT NULL, color TEXT NOT NULL, position INTEGER NOT NULL)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT, google_sub TEXT UNIQUE, display_name TEXT NOT NULL, created_at BIGINT NOT NULL)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS auth_sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at BIGINT NOT NULL)'),
     db.prepare('CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, label TEXT NOT NULL, image_data TEXT, position INTEGER NOT NULL)'),
     db.prepare("CREATE TABLE IF NOT EXISTS ballots (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, voter_name TEXT NOT NULL DEFAULT '', user_id TEXT, created_at BIGINT NOT NULL)"),
     db.prepare('CREATE TABLE IF NOT EXISTS ballot_edit_tokens (ballot_id TEXT PRIMARY KEY REFERENCES ballots(id) ON DELETE CASCADE, token TEXT NOT NULL UNIQUE)'),
@@ -35,6 +37,8 @@ export async function ensureSchema() {
     db.prepare('CREATE TABLE IF NOT EXISTS comments (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, user_id TEXT NOT NULL, author_name TEXT NOT NULL, body TEXT NOT NULL, created_at BIGINT NOT NULL)'),
     db.prepare("CREATE TABLE IF NOT EXISTS reactions (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, target_type TEXT NOT NULL CHECK(target_type IN ('item', 'comment')), target_id TEXT NOT NULL, user_id TEXT NOT NULL, emoji TEXT NOT NULL, created_at BIGINT NOT NULL)"),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_ranking_tiers_position ON ranking_tiers(ranking_id, position)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires_at)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_items_ranking_position ON items(ranking_id, position)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_ballots_ranking_created ON ballots(ranking_id, created_at)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_ballots_ranking_user ON ballots(ranking_id, user_id)'),
@@ -87,6 +91,19 @@ export async function getRankingsForOwner(userId: string) {
     WHERE o.user_id = ? GROUP BY r.id ORDER BY r.created_at DESC
   `).bind(userId).all<{ slug: string; title: string; description: string; createdAt: number; isOpen: number; closesAt: number | null; accessMode: RankingAccessMode; inviteToken: string | null; ballotCount: number }>();
   return rows.results.map((row) => ({ ...row, isOpen: Boolean(row.isOpen), closesAt: row.closesAt === null ? null : Number(row.closesAt), ballotCount: Number(row.ballotCount) }));
+}
+
+export async function getRankingsForParticipant(userId: string) {
+  await ensureSchema();
+  const rows = await db.prepare(`
+    SELECT r.slug, r.title, r.description, r.is_open AS isOpen, r.closes_at AS closesAt,
+      MAX(b.created_at) AS votedAt, COUNT(DISTINCT b.id) AS ballotCount
+    FROM rankings r JOIN ballots b ON b.ranking_id = r.id
+    WHERE b.user_id = ?
+    GROUP BY r.id, r.slug, r.title, r.description, r.is_open, r.closes_at
+    ORDER BY MAX(b.created_at) DESC
+  `).bind(userId).all<{ slug: string; title: string; description: string; isOpen: number; closesAt: number | null; votedAt: number; ballotCount: number }>();
+  return rows.results.map((row) => ({ ...row, isOpen: Boolean(row.isOpen), closesAt: row.closesAt === null ? null : Number(row.closesAt), votedAt: Number(row.votedAt), ballotCount: Number(row.ballotCount) }));
 }
 
 export async function getRanking(slug: string): Promise<RankingData | null> {

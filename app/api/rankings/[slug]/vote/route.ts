@@ -1,6 +1,6 @@
 import { ensureSchema, getRanking } from '@/db/rankings';
 import { db } from '@/db/client';
-import { chatGPTSignInPath, getChatGPTUser } from '@/app/chatgpt-auth';
+import { getCurrentUser, signInPath } from '@/app/auth';
 import { getUserProfile } from '@/db/profiles';
 import { getRankingAccess, hasAccess, hasVotePinAccess } from '@/db/ranking-access';
 
@@ -8,7 +8,7 @@ type RouteContext = { params: Promise<{ slug: string }> };
 
 export async function GET(request: Request, { params }: RouteContext) {
   const { slug } = await params;
-  const user = await getChatGPTUser();
+  const user = await getCurrentUser();
   const access = await getRankingAccess(slug, user?.userId);
   if (!access) return Response.json({ error: 'Ranking nicht gefunden.' }, { status: 404 });
   if (!hasAccess(request, slug, access)) return Response.json({ error: 'Dieses Ranking ist privat.', accessMode: access.accessMode }, { status: 403 });
@@ -28,10 +28,10 @@ export async function GET(request: Request, { params }: RouteContext) {
 export async function POST(request: Request, { params }: RouteContext) {
   try {
     const { slug } = await params;
-    const user = await getChatGPTUser();
+    const user = await getCurrentUser();
     if (!user) {
       return Response.json(
-        { error: 'Bitte melde dich zuerst an.', signInPath: chatGPTSignInPath(`/r/${slug}`) },
+        { error: 'Bitte melde dich zuerst an.', signInPath: signInPath(`/r/${slug}`) },
         { status: 401 },
       );
     }

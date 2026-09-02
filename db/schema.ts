@@ -28,6 +28,21 @@ export const rankingTiers = sqliteTable('ranking_tiers', {
   position: integer('position').notNull(),
 }, (table) => [index('idx_ranking_tiers_position').on(table.rankingId, table.position)]);
 
+export const users = sqliteTable('users', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull().unique(),
+  passwordHash: text('password_hash'),
+  googleSub: text('google_sub').unique(),
+  displayName: text('display_name').notNull(),
+  createdAt: integer('created_at').notNull(),
+});
+
+export const authSessions = sqliteTable('auth_sessions', {
+  tokenHash: text('token_hash').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  expiresAt: integer('expires_at').notNull(),
+}, (table) => [index('idx_auth_sessions_user').on(table.userId), index('idx_auth_sessions_expires').on(table.expiresAt)]);
+
 export const userProfiles = sqliteTable('user_profiles', {
   userId: text('user_id').primaryKey(),
   displayName: text('display_name').notNull(),

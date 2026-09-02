@@ -1,4 +1,4 @@
-import { getChatGPTUser } from '@/app/chatgpt-auth';
+import { getCurrentUser } from '@/app/auth';
 import { deleteOwnedRanking, duplicateOwnedRanking, getOwnedRanking, getRanking, hasUserVoted, isSlugAvailable, updateOwnedRanking, type RankingAccessMode, type ResultsVisibility, type VotingNameMode } from '@/db/rankings';
 import { getRankingAccess, hasAccess, hasVotePinAccess } from '@/db/ranking-access';
 import { hashPassword } from '@/lib/passwords';
@@ -7,7 +7,7 @@ type RouteContext = { params: Promise<{ slug: string }> };
 
 export async function GET(request: Request, { params }: RouteContext) {
   const { slug } = await params;
-  const user = await getChatGPTUser();
+  const user = await getCurrentUser();
   const access = await getRankingAccess(slug, user?.userId);
   if (!access) return Response.json({ error: 'Ranking nicht gefunden.' }, { status: 404 });
   if (!hasAccess(request, slug, access)) return Response.json({ error: 'Dieses Ranking ist privat.', accessMode: access.accessMode }, { status: 403 });
@@ -22,7 +22,7 @@ export async function GET(request: Request, { params }: RouteContext) {
 
 export async function PATCH(request: Request, { params }: RouteContext) {
   try {
-    const user = await getChatGPTUser();
+    const user = await getCurrentUser();
     if (!user) return Response.json({ error: 'Bitte melde dich zuerst an.' }, { status: 401 });
     const { slug } = await params;
     const body = await request.json() as { slug?: unknown; title?: unknown; description?: unknown; isOpen?: unknown; closesAt?: unknown; accessMode?: unknown; password?: unknown; nameMode?: unknown; oneVotePerUser?: unknown; resultsVisibility?: unknown; votePin?: unknown; removeVotePin?: unknown; previewImageData?: unknown; items?: unknown; tiers?: unknown };
@@ -86,7 +86,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
 export async function POST(_request: Request, { params }: RouteContext) {
   try {
-    const user = await getChatGPTUser();
+    const user = await getCurrentUser();
     if (!user) return Response.json({ error: 'Bitte melde dich zuerst an.' }, { status: 401 });
     const { slug } = await params;
     const duplicateSlug = await duplicateOwnedRanking(slug, user.userId, user.email);
@@ -99,7 +99,7 @@ export async function POST(_request: Request, { params }: RouteContext) {
 
 export async function DELETE(request: Request, { params }: RouteContext) {
   try {
-    const user = await getChatGPTUser();
+    const user = await getCurrentUser();
     if (!user) return Response.json({ error: 'Bitte melde dich zuerst an.' }, { status: 401 });
     const { slug } = await params;
     const body = await request.json() as { confirmationTitle?: unknown };

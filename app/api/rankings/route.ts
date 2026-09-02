@@ -1,12 +1,12 @@
 import { createSecret, createSlug, defaultTiers, ensureSchema, type RankingAccessMode } from '@/db/rankings';
 import { db } from '@/db/client';
-import { chatGPTSignInPath, getChatGPTUser } from '@/app/chatgpt-auth';
+import { getCurrentUser, signInPath } from '@/app/auth';
 import { hashPassword } from '@/lib/passwords';
 
 export async function POST(request: Request) {
   try {
-    const user = await getChatGPTUser();
-    if (!user) return Response.json({ error: 'Bitte melde dich zuerst an.', signInPath: chatGPTSignInPath('/') }, { status: 401 });
+    const user = await getCurrentUser();
+    if (!user) return Response.json({ error: 'Bitte melde dich zuerst an.', signInPath: signInPath('/') }, { status: 401 });
     const body = await request.json() as { title?: unknown; description?: unknown; closesAt?: unknown; accessMode?: unknown; password?: unknown; items?: unknown };
     const title = typeof body.title === 'string' ? body.title.trim().slice(0, 100) : '';
     const description = typeof body.description === 'string' ? body.description.trim().slice(0, 280) : '';

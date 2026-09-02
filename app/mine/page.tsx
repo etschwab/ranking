@@ -11,7 +11,7 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
-import { requireChatGPTUser, chatGPTSignOutPath } from "@/app/chatgpt-auth";
+import { requireUser, signOutPath } from "@/app/auth";
 import { BrandHeader } from "@/components/brand-header";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { RankingTemplateButton } from "@/components/ranking-template-button";
@@ -21,7 +21,7 @@ import { getUserProfile } from "@/db/profiles";
 export const dynamic = "force-dynamic";
 
 export default async function MyRankingsPage() {
-  const user = await requireChatGPTUser("/mine");
+  const user = await requireUser("/mine");
   const profile = await getUserProfile(user);
   const rankings = await getRankingsForOwner(user.userId);
   return (
@@ -37,7 +37,7 @@ export default async function MyRankingsPage() {
               <span className="hidden sm:inline">{profile.displayName}</span>
             </a>
             <a
-              href={chatGPTSignOutPath("/")}
+              href={signOutPath("/")}
               target="_top"
               className="flex items-center gap-2 text-sm font-black"
             >
