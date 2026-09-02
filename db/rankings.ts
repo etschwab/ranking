@@ -21,8 +21,15 @@ export const defaultTiers: EditableRankingTier[] = [
 
 let schemaReady = false;
 
-async function runSchemaStatements(statements: Array<{ run(): Promise<unknown> }>) {
-  for (const statement of statements) await statement.run();
+async function runSchemaStatements(statements: Array<{ run(): Promise<unknown> }>, stage: string) {
+  for (let index = 0; index < statements.length; index += 1) {
+    try {
+      await statements[index].run();
+    } catch (error) {
+      console.error(`Failed schema statement ${stage}-${index}`, error);
+      throw new Error(`schema-${stage}-${index}`);
+    }
+  }
 }
 
 export async function ensureSchema() {
@@ -62,19 +69,19 @@ export async function ensureSchema() {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_comments_ranking_created ON comments(ranking_id, created_at)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_reactions_target ON reactions(ranking_id, target_type, target_id)'),
     db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_reactions_unique ON reactions(ranking_id, target_type, target_id, user_id, emoji)'),
-    ]);
+    ], 'base');
   } catch (error) {
     console.error('Failed to initialize base schema', error);
-    throw new Error('schema-base');
+    throw error;
   }
   try {
     await runSchemaStatements([
       db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id)'),
       db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires_at)'),
-    ]);
+    ], 'session-indexes');
   } catch (error) {
     console.error('Failed to initialize session indexes', error);
-    throw new Error('schema-session-indexes');
+    throw error;
   }
   try {
     await runSchemaStatements([
@@ -100,10 +107,10 @@ export async function ensureSchema() {
     db.prepare('ALTER TABLE user_profiles ALTER COLUMN updated_at TYPE BIGINT'),
     db.prepare('ALTER TABLE comments ALTER COLUMN created_at TYPE BIGINT'),
     db.prepare('ALTER TABLE reactions ALTER COLUMN created_at TYPE BIGINT'),
-    ]);
+    ], 'updates');
   } catch (error) {
     console.error('Failed to update schema', error);
-    throw new Error('schema-updates');
+    throw error;
   }
   try {
     await db.prepare(`

@@ -33,7 +33,7 @@ export async function POST(request: Request) {
   return new Response(null, { status: 303, headers: { Location: new URL(returnTo, request.url).toString(), 'Set-Cookie': sessionCookie(token, new URL(request.url).protocol === 'https:') } });
   } catch (error) {
     console.error('Account request failed', error);
-    const stage = error instanceof Error && /^schema-[a-z-]+$/.test(error.message) ? error.message : 'account-operation';
+    const stage = error instanceof Error && /^schema-[a-z0-9-]+$/.test(error.message) ? error.message : 'account-operation';
     return Response.json({ error: 'Das Konto konnte gerade nicht geladen werden.' }, { status: 500, headers: { 'X-Rankly-Error-Stage': stage } });
   }
 }
