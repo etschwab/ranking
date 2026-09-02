@@ -7,6 +7,7 @@ function redirectToLogin(request: Request, returnTo: string, mode: string, error
 }
 
 export async function POST(request: Request) {
+  try {
   const form = await request.formData();
   const mode = String(form.get('mode') ?? 'login') === 'register' ? 'register' : 'login';
   const email = String(form.get('email') ?? '').trim().toLocaleLowerCase('en-US').slice(0, 254);
@@ -30,4 +31,9 @@ export async function POST(request: Request) {
   await migrateLegacyAccount(await legacyUserIdFromToken(oldToken), userId, email);
   const token = await createUserSession(userId);
   return new Response(null, { status: 303, headers: { Location: new URL(returnTo, request.url).toString(), 'Set-Cookie': sessionCookie(token, new URL(request.url).protocol === 'https:') } });
+  } catch (error) {
+    console.error('Account request failed', error);
+    const stage = error instanceof Error && /^schema-(users|sessions)$/.test(error.message) ? error.message : 'account-operation';
+    return Response.json({ error: 'Das Konto konnte gerade nicht geladen werden.' }, { status: 500, headers: { 'X-Rankly-Error-Stage': stage } });
+  }
 }
