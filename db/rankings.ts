@@ -21,6 +21,10 @@ export const defaultTiers: EditableRankingTier[] = [
 
 let schemaReady = false;
 
+async function runSchemaStatements(statements: Array<{ run(): Promise<unknown> }>) {
+  for (const statement of statements) await statement.run();
+}
+
 export async function ensureSchema() {
   if (schemaReady) return;
   // These two tables have a foreign-key dependency. Create them in a guaranteed
@@ -38,7 +42,7 @@ export async function ensureSchema() {
     throw new Error('schema-sessions');
   }
   try {
-    await db.batch([
+    await runSchemaStatements([
     db.prepare("CREATE TABLE IF NOT EXISTS rankings (id TEXT PRIMARY KEY, slug TEXT NOT NULL UNIQUE, title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', created_at BIGINT NOT NULL, is_open INTEGER NOT NULL DEFAULT 1, closes_at BIGINT, access_mode TEXT NOT NULL DEFAULT 'public', password_hash TEXT, invite_token TEXT, access_token TEXT, name_mode TEXT NOT NULL DEFAULT 'required', one_vote_per_user INTEGER NOT NULL DEFAULT 1, results_visibility TEXT NOT NULL DEFAULT 'always', vote_pin_hash TEXT, vote_pin_token TEXT, preview_image_data TEXT)"),
     db.prepare('CREATE TABLE IF NOT EXISTS ranking_tiers (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, label TEXT NOT NULL, color TEXT NOT NULL, position INTEGER NOT NULL)'),
     db.prepare('CREATE TABLE IF NOT EXISTS items (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, label TEXT NOT NULL, image_data TEXT, position INTEGER NOT NULL)'),
@@ -64,7 +68,7 @@ export async function ensureSchema() {
     throw new Error('schema-base');
   }
   try {
-    await db.batch([
+    await runSchemaStatements([
       db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id)'),
       db.prepare('CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions(expires_at)'),
     ]);
@@ -73,7 +77,7 @@ export async function ensureSchema() {
     throw new Error('schema-session-indexes');
   }
   try {
-    await db.batch([
+    await runSchemaStatements([
     db.prepare('ALTER TABLE rankings ADD COLUMN IF NOT EXISTS is_open INTEGER NOT NULL DEFAULT 1'),
     db.prepare('ALTER TABLE rankings ADD COLUMN IF NOT EXISTS closes_at BIGINT'),
     db.prepare("ALTER TABLE rankings ADD COLUMN IF NOT EXISTS access_mode TEXT NOT NULL DEFAULT 'public'"),
