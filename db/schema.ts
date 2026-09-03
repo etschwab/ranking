@@ -33,6 +33,7 @@ export const users = sqliteTable('users', {
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash'),
   googleSub: text('google_sub').unique(),
+  eschSub: text('esch_sub').unique(),
   displayName: text('display_name').notNull(),
   createdAt: integer('created_at').notNull(),
 });

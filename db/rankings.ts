@@ -37,7 +37,7 @@ export async function ensureSchema() {
   // These two tables have a foreign-key dependency. Create them in a guaranteed
   // order because the Postgres adapter may dispatch statements in a batch together.
   try {
-    await db.prepare('CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT, google_sub TEXT UNIQUE, display_name TEXT NOT NULL, created_at BIGINT NOT NULL)').run();
+    await db.prepare('CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT, google_sub TEXT UNIQUE, esch_sub TEXT UNIQUE, display_name TEXT NOT NULL, created_at BIGINT NOT NULL)').run();
   } catch (error) {
     console.error('Failed to initialize users schema', error);
     throw new Error('schema-users');
@@ -98,6 +98,7 @@ export async function ensureSchema() {
     db.prepare('ALTER TABLE rankings ADD COLUMN IF NOT EXISTS preview_image_data TEXT'),
     db.prepare('ALTER TABLE items ADD COLUMN IF NOT EXISTS image_data TEXT'),
     db.prepare('ALTER TABLE ballots ADD COLUMN IF NOT EXISTS user_id TEXT'),
+    db.prepare('ALTER TABLE users ADD COLUMN IF NOT EXISTS esch_sub TEXT UNIQUE'),
     db.prepare('ALTER TABLE scores ADD COLUMN IF NOT EXISTS rank_position INTEGER NOT NULL DEFAULT 0'),
     db.prepare('ALTER TABLE scores DROP CONSTRAINT IF EXISTS scores_tier_check'),
     db.prepare('ALTER TABLE rankings ALTER COLUMN created_at TYPE BIGINT'),
