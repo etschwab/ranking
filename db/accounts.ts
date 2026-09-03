@@ -49,6 +49,34 @@ export async function findOrCreateGoogleUser(input: { sub: string; email: string
   return userId;
 }
 
+export async function findOrCreateSsoUser(input: { sub: string; email: string; displayName: string }) {
+  await ensureSchema();
+  const email = normalizeEmail(input.email);
+  const existing = await db
+    .prepare(
+      'SELECT id, email, display_name AS displayName, password_hash AS passwordHash, google_sub AS googleSub FROM users WHERE esch_sub = ? OR email = ? ORDER BY CASE WHEN esch_sub = ? THEN 0 ELSE 1 END LIMIT 1'
+    )
+    .bind(input.sub, email, input.sub)
+    .first<AccountRow>();
+  if (existing) {
+    await db.batch([
+      db.prepare('UPDATE users SET esch_sub = ?, display_name = ? WHERE id = ?').bind(input.sub, existing.displayName || input.displayName, existing.id),
+      db
+        .prepare(
+          'INSERT INTO user_profiles (user_id, display_name, email, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET email = excluded.email, updated_at = excluded.updated_at'
+        )
+        .bind(existing.id, existing.displayName || input.displayName, email, Date.now()),
+    ]);
+    return existing.id;
+  }
+  const userId = crypto.randomUUID();
+  await db.batch([
+    db.prepare('INSERT INTO users (id, email, password_hash, google_sub, esch_sub, display_name, created_at) VALUES (?, ?, NULL, NULL, ?, ?, ?)').bind(userId, email, input.sub, input.displayName, Date.now()),
+    db.prepare('INSERT INTO user_profiles (user_id, display_name, email, updated_at) VALUES (?, ?, ?, ?)').bind(userId, input.displayName, email, Date.now()),
+  ]);
+  return userId;
+}
+
 export async function updateAccountName(user: RanklyUser, displayName: string) {
   await ensureSchema();
   await db.prepare('UPDATE users SET display_name = ? WHERE id = ?').bind(displayName, user.userId).run();
