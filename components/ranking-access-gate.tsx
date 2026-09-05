@@ -72,7 +72,7 @@ export function RankingAccessGate({
                 id="ranking-access-password"
                 type="password"
                 required
-                  autoComplete="current-password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 className="h-12 border-2 border-foreground pl-12 font-bold"

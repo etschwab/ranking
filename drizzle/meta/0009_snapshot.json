@@ -25,9 +25,7 @@
       "indexes": {
         "ballot_edit_tokens_token_unique": {
           "name": "ballot_edit_tokens_token_unique",
-          "columns": [
-            "token"
-          ],
+          "columns": ["token"],
           "isUnique": true
         }
       },
@@ -36,12 +34,8 @@
           "name": "ballot_edit_tokens_ballot_id_ballots_id_fk",
           "tableFrom": "ballot_edit_tokens",
           "tableTo": "ballots",
-          "columnsFrom": [
-            "ballot_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["ballot_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -93,10 +87,7 @@
       "indexes": {
         "idx_ballots_ranking_created": {
           "name": "idx_ballots_ranking_created",
-          "columns": [
-            "ranking_id",
-            "created_at"
-          ],
+          "columns": ["ranking_id", "created_at"],
           "isUnique": false
         }
       },
@@ -105,12 +96,8 @@
           "name": "ballots_ranking_id_rankings_id_fk",
           "tableFrom": "ballots",
           "tableTo": "rankings",
-          "columnsFrom": [
-            "ranking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["ranking_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -161,10 +148,7 @@
       "indexes": {
         "idx_items_ranking_position": {
           "name": "idx_items_ranking_position",
-          "columns": [
-            "ranking_id",
-            "position"
-          ],
+          "columns": ["ranking_id", "position"],
           "isUnique": false
         }
       },
@@ -173,12 +157,8 @@
           "name": "items_ranking_id_rankings_id_fk",
           "tableFrom": "items",
           "tableTo": "rankings",
-          "columnsFrom": [
-            "ranking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["ranking_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -215,9 +195,7 @@
       "indexes": {
         "idx_ranking_owners_user": {
           "name": "idx_ranking_owners_user",
-          "columns": [
-            "user_id"
-          ],
+          "columns": ["user_id"],
           "isUnique": false
         }
       },
@@ -226,12 +204,8 @@
           "name": "ranking_owners_ranking_id_rankings_id_fk",
           "tableFrom": "ranking_owners",
           "tableTo": "rankings",
-          "columnsFrom": [
-            "ranking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["ranking_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -282,10 +256,7 @@
       "indexes": {
         "idx_ranking_tiers_position": {
           "name": "idx_ranking_tiers_position",
-          "columns": [
-            "ranking_id",
-            "position"
-          ],
+          "columns": ["ranking_id", "position"],
           "isUnique": false
         }
       },
@@ -294,12 +265,8 @@
           "name": "ranking_tiers_ranking_id_rankings_id_fk",
           "tableFrom": "ranking_tiers",
           "tableTo": "rankings",
-          "columnsFrom": [
-            "ranking_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["ranking_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -433,9 +400,7 @@
       "indexes": {
         "rankings_slug_unique": {
           "name": "rankings_slug_unique",
-          "columns": [
-            "slug"
-          ],
+          "columns": ["slug"],
           "isUnique": true
         }
       },
@@ -480,9 +445,7 @@
       "indexes": {
         "idx_scores_item": {
           "name": "idx_scores_item",
-          "columns": [
-            "item_id"
-          ],
+          "columns": ["item_id"],
           "isUnique": false
         }
       },
@@ -491,12 +454,8 @@
           "name": "scores_ballot_id_ballots_id_fk",
           "tableFrom": "scores",
           "tableTo": "ballots",
-          "columnsFrom": [
-            "ballot_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["ballot_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -504,22 +463,15 @@
           "name": "scores_item_id_items_id_fk",
           "tableFrom": "scores",
           "tableTo": "items",
-          "columnsFrom": [
-            "item_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["item_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "scores_ballot_id_item_id_pk": {
-          "columns": [
-            "ballot_id",
-            "item_id"
-          ],
+          "columns": ["ballot_id", "item_id"],
           "name": "scores_ballot_id_item_id_pk"
         }
       },

@@ -10,18 +10,18 @@ import {
   Plus,
   UserRound,
   Users,
-} from "lucide-react";
-import { requireUser, signOutPath } from "@/app/auth";
-import { BrandHeader } from "@/components/brand-header";
-import { CopyLinkButton } from "@/components/copy-link-button";
-import { RankingTemplateButton } from "@/components/ranking-template-button";
-import { getRankingsForOwner } from "@/db/rankings";
-import { getUserProfile } from "@/db/profiles";
+} from 'lucide-react';
+import { requireUser, signOutPath } from '@/app/auth';
+import { BrandHeader } from '@/components/brand-header';
+import { CopyLinkButton } from '@/components/copy-link-button';
+import { RankingTemplateButton } from '@/components/ranking-template-button';
+import { getRankingsForOwner } from '@/db/rankings';
+import { getUserProfile } from '@/db/profiles';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 export default async function MyRankingsPage() {
-  const user = await requireUser("/mine");
+  const user = await requireUser('/mine');
   const profile = await getUserProfile(user);
   const rankings = await getRankingsForOwner(user.userId);
   return (
@@ -37,7 +37,7 @@ export default async function MyRankingsPage() {
               <span className="hidden sm:inline">{profile.displayName}</span>
             </a>
             <a
-              href={signOutPath("/")}
+              href={signOutPath('/')}
               target="_top"
               className="flex items-center gap-2 text-sm font-black"
             >
@@ -78,11 +78,12 @@ export default async function MyRankingsPage() {
           <div className="mt-12 grid gap-5 md:grid-cols-2">
             {rankings.map((ranking, index) => {
               const closed =
-                !ranking.isOpen || (ranking.closesAt !== null && Date.now() >= ranking.closesAt);
+                !ranking.isOpen ||
+                (ranking.closesAt !== null && Date.now() >= ranking.closesAt);
               const AccessIcon =
-                ranking.accessMode === "password"
+                ranking.accessMode === 'password'
                   ? KeyRound
-                  : ranking.accessMode === "invite"
+                  : ranking.accessMode === 'invite'
                     ? Mail
                     : Globe2;
               return (
@@ -94,10 +95,10 @@ export default async function MyRankingsPage() {
                     className="h-3 border-b-2 border-foreground"
                     style={{
                       background: [
-                        "var(--tier-s)",
-                        "var(--tier-a)",
-                        "var(--tier-c)",
-                        "#d9cffd",
+                        'var(--tier-s)',
+                        'var(--tier-a)',
+                        'var(--tier-c)',
+                        '#d9cffd',
                       ][index % 4],
                     }}
                   />
@@ -119,7 +120,7 @@ export default async function MyRankingsPage() {
                     </div>
                     {closed || ranking.closesAt ? (
                       <p
-                        className={`mt-4 flex items-center gap-2 text-sm font-black ${closed ? "text-[#8a1717]" : "text-muted-foreground"}`}
+                        className={`mt-4 flex items-center gap-2 text-sm font-black ${closed ? 'text-[#8a1717]' : 'text-muted-foreground'}`}
                       >
                         {closed ? (
                           <LockKeyhole className="size-4" />
@@ -127,17 +128,19 @@ export default async function MyRankingsPage() {
                           <Clock3 className="size-4" />
                         )}
                         {closed
-                          ? ranking.isOpen ? "Einsendeschluss erreicht" : "Abstimmung geschlossen"
-                          : `Offen bis ${new Date(ranking.closesAt!).toLocaleString("de-CH", { dateStyle: "medium", timeStyle: "short" })}`}
+                          ? ranking.isOpen
+                            ? 'Einsendeschluss erreicht'
+                            : 'Abstimmung geschlossen'
+                          : `Offen bis ${new Date(ranking.closesAt!).toLocaleString('de-CH', { dateStyle: 'medium', timeStyle: 'short' })}`}
                       </p>
                     ) : null}
                     <p className="mt-3 flex items-center gap-2 text-sm font-black text-muted-foreground">
                       <AccessIcon className="size-4" />
-                      {ranking.accessMode === "password"
-                        ? "Mit Passwort geschützt"
-                        : ranking.accessMode === "invite"
-                          ? "Nur per Einladung"
-                          : "Öffentlich per Link"}
+                      {ranking.accessMode === 'password'
+                        ? 'Mit Passwort geschützt'
+                        : ranking.accessMode === 'invite'
+                          ? 'Nur per Einladung'
+                          : 'Öffentlich per Link'}
                     </p>
                     <div className="mt-6 flex flex-wrap gap-2">
                       <a
@@ -154,7 +157,7 @@ export default async function MyRankingsPage() {
                       </a>
                       <CopyLinkButton
                         path={
-                          ranking.accessMode === "invite" && ranking.inviteToken
+                          ranking.accessMode === 'invite' && ranking.inviteToken
                             ? `/r/${ranking.slug}?invite=${ranking.inviteToken}`
                             : `/r/${ranking.slug}`
                         }

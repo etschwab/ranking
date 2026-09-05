@@ -16,9 +16,13 @@ export function accessCookieName(slug: string) {
   return `rankly-access-${slug}`;
 }
 
-export async function getRankingAccess(slug: string, userId?: string): Promise<RankingAccess | null> {
+export async function getRankingAccess(
+  slug: string,
+  userId?: string,
+): Promise<RankingAccess | null> {
   await ensureSchema();
-  return db.prepare(`
+  return db
+    .prepare(`
     SELECT r.id, r.access_mode AS accessMode, r.password_hash AS passwordHash,
       r.invite_token AS inviteToken, r.access_token AS accessToken,
       r.vote_pin_hash AS votePinHash, r.vote_pin_token AS votePinToken,
@@ -26,7 +30,9 @@ export async function getRankingAccess(slug: string, userId?: string): Promise<R
     FROM rankings r
     LEFT JOIN ranking_owners o ON o.ranking_id = r.id
     WHERE r.slug = ?
-  `).bind(userId ?? '', slug).first<RankingAccess>();
+  `)
+    .bind(userId ?? '', slug)
+    .first<RankingAccess>();
 }
 
 function cookieValue(request: Request, name: string) {
@@ -38,9 +44,16 @@ function cookieValue(request: Request, name: string) {
   return '';
 }
 
-export function hasAccess(request: Request, slug: string, access: RankingAccess) {
+export function hasAccess(
+  request: Request,
+  slug: string,
+  access: RankingAccess,
+) {
   if (access.accessMode === 'public' || access.isOwner) return true;
-  return Boolean(access.accessToken) && cookieValue(request, accessCookieName(slug)) === access.accessToken;
+  return (
+    Boolean(access.accessToken) &&
+    cookieValue(request, accessCookieName(slug)) === access.accessToken
+  );
 }
 
 export function accessCookie(request: Request, slug: string, token: string) {
@@ -52,9 +65,16 @@ export function votePinCookieName(slug: string) {
   return `rankly-vote-pin-${slug}`;
 }
 
-export function hasVotePinAccess(request: Request, slug: string, access: RankingAccess) {
+export function hasVotePinAccess(
+  request: Request,
+  slug: string,
+  access: RankingAccess,
+) {
   if (!access.votePinHash || access.isOwner) return true;
-  return Boolean(access.votePinToken) && cookieValue(request, votePinCookieName(slug)) === access.votePinToken;
+  return (
+    Boolean(access.votePinToken) &&
+    cookieValue(request, votePinCookieName(slug)) === access.votePinToken
+  );
 }
 
 export function votePinCookie(request: Request, slug: string, token: string) {
