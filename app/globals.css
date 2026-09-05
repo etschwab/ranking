@@ -94,17 +94,34 @@ body {
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-html { scroll-behavior: smooth; }
-::selection { background: #d9cffd; color: #191817; }
+html {
+  scroll-behavior: smooth;
+}
+::selection {
+  background: #d9cffd;
+  color: #191817;
+}
 
 .rankly-page {
   background-color: var(--background);
   background-image:
-    radial-gradient(circle at 8% 6%, rgb(217 207 253 / 0.55), transparent 24rem),
-    radial-gradient(circle at 94% 32%, rgb(255 241 168 / 0.45), transparent 25rem),
+    radial-gradient(
+      circle at 8% 6%,
+      rgb(217 207 253 / 0.55),
+      transparent 24rem
+    ),
+    radial-gradient(
+      circle at 94% 32%,
+      rgb(255 241 168 / 0.45),
+      transparent 25rem
+    ),
     linear-gradient(rgb(25 24 23 / 0.028) 1px, transparent 1px),
     linear-gradient(90deg, rgb(25 24 23 / 0.028) 1px, transparent 1px);
-  background-size: auto, auto, 32px 32px, 32px 32px;
+  background-size:
+    auto,
+    auto,
+    32px 32px,
+    32px 32px;
 }
 
 .rankly-header {
@@ -121,7 +138,9 @@ html { scroll-behavior: smooth; }
 }
 
 .rankly-card {
-  transition: transform 180ms ease, box-shadow 180ms ease;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .rankly-card:hover {
@@ -129,18 +148,33 @@ html { scroll-behavior: smooth; }
   box-shadow: 10px 10px 0 var(--ink);
 }
 
-button, a, input, textarea {
+button,
+a,
+input,
+textarea {
   -webkit-tap-highlight-color: transparent;
 }
 
-button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible {
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
   outline: 3px solid var(--primary);
   outline-offset: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html { scroll-behavior: auto; }
-  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 .dark {

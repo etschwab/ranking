@@ -25,9 +25,17 @@ function normalizeOrigin(value: string, variableName: string) {
   } catch {
     throw new Error(`${variableName} ist keine gültige URL.`);
   }
-  const isLocal = url.hostname === 'localhost' || url.hostname.endsWith('.localhost') || url.hostname === '127.0.0.1';
-  if (process.env.NODE_ENV === 'production' && (url.protocol !== 'https:' || isLocal)) {
-    throw new Error(`${variableName} muss in Produktion eine öffentliche HTTPS-URL sein.`);
+  const isLocal =
+    url.hostname === 'localhost' ||
+    url.hostname.endsWith('.localhost') ||
+    url.hostname === '127.0.0.1';
+  if (
+    process.env.NODE_ENV === 'production' &&
+    (url.protocol !== 'https:' || isLocal)
+  ) {
+    throw new Error(
+      `${variableName} muss in Produktion eine öffentliche HTTPS-URL sein.`,
+    );
   }
   return url.origin;
 }
@@ -42,19 +50,22 @@ export function getSsoConfig(): SsoConfig | null {
 
   if (!authUrlRaw || !supabaseUrlRaw || !clientId || !clientSecret) {
     throw new Error(
-      'Für SSO müssen NEXT_PUBLIC_AUTH_URL, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_OAUTH_CLIENT_ID und SUPABASE_OAUTH_CLIENT_SECRET gemeinsam gesetzt sein.'
+      'Für SSO müssen NEXT_PUBLIC_AUTH_URL, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_OAUTH_CLIENT_ID und SUPABASE_OAUTH_CLIENT_SECRET gemeinsam gesetzt sein.',
     );
   }
 
   const authUrl = normalizeOrigin(authUrlRaw, 'NEXT_PUBLIC_AUTH_URL');
-  const supabaseUrl = normalizeOrigin(supabaseUrlRaw, 'NEXT_PUBLIC_SUPABASE_URL');
+  const supabaseUrl = normalizeOrigin(
+    supabaseUrlRaw,
+    'NEXT_PUBLIC_SUPABASE_URL',
+  );
 
   return {
     authUrl,
     clientId,
     clientSecret,
     authorizeEndpoint: `${supabaseUrl}/auth/v1/oauth/authorize`,
-    tokenEndpoint: `${supabaseUrl}/auth/v1/oauth/token`
+    tokenEndpoint: `${supabaseUrl}/auth/v1/oauth/token`,
   };
 }
 
@@ -62,22 +73,37 @@ function randomBase64Url(byteLength = 32) {
   const bytes = crypto.getRandomValues(new Uint8Array(byteLength));
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
 }
 
 export async function createPkceFlow() {
   const verifier = randomBase64Url(48);
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(verifier),
+  );
   let binary = '';
-  for (const byte of new Uint8Array(digest)) binary += String.fromCharCode(byte);
+  for (const byte of new Uint8Array(digest))
+    binary += String.fromCharCode(byte);
   return {
     verifier,
-    challenge: btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, ''),
-    state: randomBase64Url(32)
+    challenge: btoa(binary)
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/g, ''),
+    state: randomBase64Url(32),
   };
 }
 
-export function buildAuthorizationUrl(config: SsoConfig, redirectUri: string, challenge: string, state: string) {
+export function buildAuthorizationUrl(
+  config: SsoConfig,
+  redirectUri: string,
+  challenge: string,
+  state: string,
+) {
   const url = new URL(config.authorizeEndpoint);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', config.clientId);
@@ -92,7 +118,8 @@ export function buildAuthorizationUrl(config: SsoConfig, redirectUri: string, ch
 export function constantTimeEqual(left: string, right: string) {
   let mismatch = left.length ^ right.length;
   const length = Math.max(left.length, right.length);
-  for (let index = 0; index < length; index += 1) mismatch |= (left.charCodeAt(index) || 0) ^ (right.charCodeAt(index) || 0);
+  for (let index = 0; index < length; index += 1)
+    mismatch |= (left.charCodeAt(index) || 0) ^ (right.charCodeAt(index) || 0);
   return mismatch === 0;
 }
 
@@ -100,16 +127,22 @@ function decodeIdentity(accessToken: string): SsoIdentity | null {
   try {
     const payload = accessToken.split('.')[1];
     if (!payload) return null;
-    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(payload.length / 4) * 4, '=');
+    const normalized = payload
+      .replace(/-/g, '+')
+      .replace(/_/g, '/')
+      .padEnd(Math.ceil(payload.length / 4) * 4, '=');
     const claims = JSON.parse(atob(normalized)) as {
       sub?: unknown;
       email?: unknown;
       user_metadata?: { full_name?: unknown; name?: unknown };
     };
-    if (typeof claims.sub !== 'string' || typeof claims.email !== 'string') return null;
+    if (typeof claims.sub !== 'string' || typeof claims.email !== 'string')
+      return null;
     const metaName =
-      (typeof claims.user_metadata?.full_name === 'string' && claims.user_metadata.full_name.trim()) ||
-      (typeof claims.user_metadata?.name === 'string' && claims.user_metadata.name.trim()) ||
+      (typeof claims.user_metadata?.full_name === 'string' &&
+        claims.user_metadata.full_name.trim()) ||
+      (typeof claims.user_metadata?.name === 'string' &&
+        claims.user_metadata.name.trim()) ||
       '';
     const displayName = (metaName || claims.email.split('@')[0]).slice(0, 50);
     return { sub: claims.sub, email: claims.email, displayName };
@@ -118,7 +151,12 @@ function decodeIdentity(accessToken: string): SsoIdentity | null {
   }
 }
 
-export async function exchangeSsoCode(config: SsoConfig, code: string, verifier: string, redirectUri: string): Promise<SsoIdentity | null> {
+export async function exchangeSsoCode(
+  config: SsoConfig,
+  code: string,
+  verifier: string,
+  redirectUri: string,
+): Promise<SsoIdentity | null> {
   try {
     const credentials = btoa(`${config.clientId}:${config.clientSecret}`);
     const response = await fetch(config.tokenEndpoint, {
@@ -126,25 +164,42 @@ export async function exchangeSsoCode(config: SsoConfig, code: string, verifier:
       headers: {
         Accept: 'application/json',
         Authorization: `Basic ${credentials}`,
-        'Content-Type': 'application/x-www-form-urlencoded'
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri, code_verifier: verifier }),
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+        code_verifier: verifier,
+      }),
       cache: 'no-store',
-      signal: AbortSignal.timeout(8_000)
+      signal: AbortSignal.timeout(8_000),
     });
     if (!response.ok) return null;
     const data = (await response.json()) as { access_token?: unknown };
-    return typeof data.access_token === 'string' ? decodeIdentity(data.access_token) : null;
+    return typeof data.access_token === 'string'
+      ? decodeIdentity(data.access_token)
+      : null;
   } catch {
     return null;
   }
 }
 
-export function setSsoFlowCookies(headers: Headers, flow: { state: string; verifier: string; nextPath: string }, secure: boolean) {
+export function setSsoFlowCookies(
+  headers: Headers,
+  flow: { state: string; verifier: string; nextPath: string },
+  secure: boolean,
+) {
   const options = `Path=/auth/sso; HttpOnly; SameSite=Lax; Max-Age=${SSO_FLOW_MAX_AGE}${secure ? '; Secure' : ''}`;
   headers.append('Set-Cookie', `${SSO_STATE_COOKIE}=${flow.state}; ${options}`);
-  headers.append('Set-Cookie', `${SSO_VERIFIER_COOKIE}=${flow.verifier}; ${options}`);
-  headers.append('Set-Cookie', `${SSO_NEXT_COOKIE}=${encodeURIComponent(flow.nextPath)}; ${options}`);
+  headers.append(
+    'Set-Cookie',
+    `${SSO_VERIFIER_COOKIE}=${flow.verifier}; ${options}`,
+  );
+  headers.append(
+    'Set-Cookie',
+    `${SSO_NEXT_COOKIE}=${encodeURIComponent(flow.nextPath)}; ${options}`,
+  );
 }
 
 export function clearSsoFlowCookies(headers: Headers, secure: boolean) {
@@ -155,9 +210,11 @@ export function clearSsoFlowCookies(headers: Headers, secure: boolean) {
 }
 
 export function cookieValue(request: Request, name: string) {
-  return (request.headers.get('cookie') ?? '')
-    .split(';')
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${name}=`))
-    ?.slice(name.length + 1) ?? '';
+  return (
+    (request.headers.get('cookie') ?? '')
+      .split(';')
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(`${name}=`))
+      ?.slice(name.length + 1) ?? ''
+  );
 }

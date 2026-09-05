@@ -1,5 +1,9 @@
 import { getCurrentUser } from '@/app/auth';
-import { getRanking, getRankingParticipants, hasUserVoted } from '@/db/rankings';
+import {
+  getRanking,
+  getRankingParticipants,
+  hasUserVoted,
+} from '@/db/rankings';
 import { getRankingAccess, hasAccess } from '@/db/ranking-access';
 
 type RouteContext = { params: Promise<{ slug: string }> };
@@ -8,13 +12,36 @@ export async function GET(request: Request, { params }: RouteContext) {
   const { slug } = await params;
   const user = await getCurrentUser();
   const access = await getRankingAccess(slug, user?.userId);
-  if (!access) return Response.json({ error: 'Ranking nicht gefunden.' }, { status: 404 });
-  if (!hasAccess(request, slug, access)) return Response.json({ error: 'Dieses Ranking ist privat.', accessMode: access.accessMode }, { status: 403 });
+  if (!access)
+    return Response.json({ error: 'Ranking nicht gefunden.' }, { status: 404 });
+  if (!hasAccess(request, slug, access))
+    return Response.json(
+      { error: 'Dieses Ranking ist privat.', accessMode: access.accessMode },
+      { status: 403 },
+    );
   const ranking = await getRanking(slug);
-  if (!ranking) return Response.json({ error: 'Ranking nicht gefunden.' }, { status: 404 });
+  if (!ranking)
+    return Response.json({ error: 'Ranking nicht gefunden.' }, { status: 404 });
   const viewerHasVoted = await hasUserVoted(ranking.id, user?.userId);
-  const closed = !ranking.isOpen || (ranking.closesAt !== null && Date.now() >= ranking.closesAt);
-  const canViewResults = access.isOwner || ranking.resultsVisibility === 'always' || (ranking.resultsVisibility === 'after_vote' && viewerHasVoted) || (ranking.resultsVisibility === 'after_close' && closed);
-  if (!canViewResults) return Response.json({ error: ranking.resultsVisibility === 'after_vote' ? 'Stimme zuerst selbst ab, um die Ergebnisse zu sehen.' : 'Die Ergebnisse werden nach Ende der Abstimmung sichtbar.' }, { status: 403 });
-  return Response.json({ participants: await getRankingParticipants(ranking.id) });
+  const closed =
+    !ranking.isOpen ||
+    (ranking.closesAt !== null && Date.now() >= ranking.closesAt);
+  const canViewResults =
+    access.isOwner ||
+    ranking.resultsVisibility === 'always' ||
+    (ranking.resultsVisibility === 'after_vote' && viewerHasVoted) ||
+    (ranking.resultsVisibility === 'after_close' && closed);
+  if (!canViewResults)
+    return Response.json(
+      {
+        error:
+          ranking.resultsVisibility === 'after_vote'
+            ? 'Stimme zuerst selbst ab, um die Ergebnisse zu sehen.'
+            : 'Die Ergebnisse werden nach Ende der Abstimmung sichtbar.',
+      },
+      { status: 403 },
+    );
+  return Response.json({
+    participants: await getRankingParticipants(ranking.id),
+  });
 }
