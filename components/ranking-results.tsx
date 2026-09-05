@@ -134,6 +134,7 @@ export function RankingResults({ slug }: { slug: string }) {
   );
 
   useEffect(() => {
+    // oxlint-disable-next-line react/react-compiler -- standard fetch-on-mount + polling: `load` sets ranking/participants/error state as it runs
     void load();
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') void load(true);

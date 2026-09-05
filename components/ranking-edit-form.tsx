@@ -1,6 +1,7 @@
 'use client';
 /* oxlint-disable next/no-img-element -- uploaded images are already resized client-side data URLs */
 
+import Link from 'next/link';
 import { useState } from 'react';
 import {
   AlertOctagon,
@@ -255,7 +256,7 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
     }
   }
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError('');
@@ -288,7 +289,7 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
       const data = (await response.json()) as { error?: string; slug?: string };
       if (!response.ok)
         throw new Error(data.error ?? 'Speichern fehlgeschlagen.');
-      window.location.href = `/r/${data.slug ?? ranking.slug}/results`;
+      window.location.assign(`/r/${data.slug ?? ranking.slug}/results`);
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : 'Speichern fehlgeschlagen.',
@@ -307,7 +308,7 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
       const data = (await response.json()) as { slug?: string; error?: string };
       if (!response.ok || !data.slug)
         throw new Error(data.error ?? 'Duplizieren fehlgeschlagen.');
-      window.location.href = `/r/${data.slug}/edit`;
+      window.location.assign(`/r/${data.slug}/edit`);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -333,7 +334,7 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
         throw new Error(data.error ?? 'Löschen fehlgeschlagen.');
       localStorage.removeItem(`rankly-ballot-${ranking.slug}`);
       localStorage.removeItem(`rankly-vote-draft-${ranking.slug}`);
-      window.location.href = '/mine';
+      window.location.assign('/mine');
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : 'Löschen fehlgeschlagen.',
@@ -662,6 +663,7 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
             </span>
             <input
               type="checkbox"
+              aria-label="Nur eine Stimme pro Person"
               checked={oneVotePerUser}
               onChange={(event) => setOneVotePerUser(event.target.checked)}
               className="size-5 accent-primary"
@@ -1106,12 +1108,12 @@ export function RankingEditForm({ ranking }: { ranking: OwnedRankingData }) {
         </p>
       )}
       <div className="sticky bottom-4 z-20 flex flex-col gap-3 rounded-[1.25rem] border-[3px] border-foreground bg-card/95 p-4 shadow-[6px_6px_0_var(--ink)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-        <a
+        <Link
           href="/mine"
           className="inline-flex items-center gap-2 text-sm font-black text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-4" /> Abbrechen
-        </a>
+        </Link>
         <div className="flex flex-col gap-2 sm:flex-row">
           <a
             href={`/r/${ranking.slug}/results`}

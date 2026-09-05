@@ -15,7 +15,7 @@ export function RankingTemplateButton({ slug }: { slug: string }) {
       const data = (await response.json()) as { slug?: string; error?: string };
       if (!response.ok || !data.slug)
         throw new Error(data.error ?? 'Vorlage konnte nicht erstellt werden.');
-      window.location.href = `/r/${data.slug}/edit`;
+      window.location.assign(`/r/${data.slug}/edit`);
     } catch (reason) {
       setError(
         reason instanceof Error

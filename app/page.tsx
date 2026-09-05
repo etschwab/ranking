@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
@@ -165,6 +166,7 @@ export default function Home() {
           draft.options ||
           draft.closesAt
         ) {
+          // oxlint-disable-next-line react/react-compiler -- restoring a locally saved draft on mount; localStorage is only available client-side, so this can't run during render
           setTitle(draft.title ?? '');
           setDescription(draft.description ?? '');
           setOptions(draft.options ?? '');
@@ -195,7 +197,7 @@ export default function Home() {
       ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
-  async function createRanking(event: React.FormEvent) {
+  async function createRanking(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setError('');
@@ -218,13 +220,13 @@ export default function Home() {
         signInPath?: string;
       };
       if (response.status === 401 && data.signInPath) {
-        window.location.href = data.signInPath;
+        window.location.assign(data.signInPath);
         return;
       }
       if (!response.ok || !data.slug)
         throw new Error(data.error ?? 'Unbekannter Fehler');
       localStorage.removeItem('rankly-creator-draft');
-      window.location.href = `/r/${data.slug}`;
+      window.location.assign(`/r/${data.slug}`);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -238,8 +240,8 @@ export default function Home() {
   return (
     <main className="rankly-page min-h-screen overflow-x-clip text-foreground">
       <header className="rankly-header mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6">
-        <a
-          href="#"
+        <Link
+          href="/"
           className="flex items-center gap-2.5 font-black tracking-[-0.04em]"
           aria-label="Rankly Startseite"
         >
@@ -247,18 +249,18 @@ export default function Home() {
             <Trophy className="size-4.5 -rotate-3" />
           </span>
           <span className="text-xl">RANKLY</span>
-        </a>
+        </Link>
         <nav className="flex items-center gap-2">
           {account?.user ? (
             <>
-              <a
+              <Link
                 href="/mine"
                 className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-black transition hover:bg-muted"
               >
                 <BarChart3 className="size-4" />{' '}
                 <span className="hidden sm:inline">Meine Rankings</span>
-              </a>
-              <a
+              </Link>
+              <Link
                 href="/profile"
                 className="flex items-center gap-2 rounded-lg bg-[#d9cffd] px-3 py-2 text-sm font-black transition hover:bg-[#cfc1fb]"
               >
@@ -266,7 +268,7 @@ export default function Home() {
                 <span className="hidden md:inline">
                   {account.user.displayName}
                 </span>
-              </a>
+              </Link>
               <a
                 href={account.signOutPath}
                 target="_top"

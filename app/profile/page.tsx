@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { BarChart3, CheckCircle2, LogOut, Plus, UserRound } from 'lucide-react';
 import { requireUser, signOutPath } from '@/app/auth';
 import { BrandHeader } from '@/components/brand-header';
@@ -40,12 +41,12 @@ export default async function ProfilePage() {
               Bestimme, unter welchem Namen du bei Rankly sichtbar bist.
             </p>
           </div>
-          <a
+          <Link
             href="/mine"
             className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl border-2 border-foreground bg-card px-5 font-black shadow-[3px_3px_0_var(--ink)]"
           >
             <BarChart3 className="size-5" /> Meine Rankings
-          </a>
+          </Link>
         </div>
         <div className="rankly-card mt-10 flex items-center gap-4 rounded-[1.5rem] border-[3px] border-foreground bg-[#d9cffd] p-5 shadow-[5px_5px_0_var(--ink)]">
           <span className="grid size-14 shrink-0 place-items-center rounded-2xl border-2 border-foreground bg-card">

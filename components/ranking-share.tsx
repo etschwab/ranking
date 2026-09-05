@@ -12,6 +12,7 @@ export function RankingShare({ slug, title }: { slug: string; title: string }) {
 
   useEffect(() => {
     const shareUrl = `${window.location.origin}/r/${slug}`;
+    // oxlint-disable-next-line react/react-compiler -- must run post-mount (not during render) so the server-rendered fallback matches the client's first paint and hydration doesn't mismatch
     setUrl(shareUrl);
     void QRCode.toDataURL(shareUrl, {
       width: 360,
@@ -34,6 +35,7 @@ export function RankingShare({ slug, title }: { slug: string; title: string }) {
       <div className="grid gap-5 sm:grid-cols-[132px_1fr] sm:items-center">
         <div className="grid aspect-square w-32 place-items-center overflow-hidden rounded-xl border-2 border-foreground bg-white p-2">
           {qrCode ? (
+            // oxlint-disable-next-line next/no-img-element -- runtime-generated data: URI; next/image can't optimize it and doesn't need to
             <img
               src={qrCode}
               alt={`QR-Code für ${title}`}
