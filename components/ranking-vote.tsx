@@ -1,6 +1,7 @@
 'use client';
 /* oxlint-disable next/no-img-element -- option thumbnails are pre-compressed data URLs */
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   closestCenter,
@@ -287,7 +288,7 @@ export function RankingVote({ slug }: { slug: string }) {
   const [accessRevision, setAccessRevision] = useState(0);
   const [votePin, setVotePin] = useState('');
   const [unlockingPin, setUnlockingPin] = useState(false);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor),
@@ -546,7 +547,7 @@ export function RankingVote({ slug }: { slug: string }) {
     window.setTimeout(() => setCopied(false), 1600);
   }
 
-  async function unlockVotePin(event: React.FormEvent<HTMLFormElement>) {
+  async function unlockVotePin(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setUnlockingPin(true);
     setError('');
@@ -585,7 +586,7 @@ export function RankingVote({ slug }: { slug: string }) {
         signInPath?: string;
       };
       if (response.status === 401 && data.signInPath) {
-        window.location.href = data.signInPath;
+        window.location.assign(data.signInPath);
         return;
       }
       if (!response.ok || !data.editToken)
@@ -631,12 +632,12 @@ export function RankingVote({ slug }: { slug: string }) {
         <div className="mx-auto max-w-3xl px-5 py-24 text-center">
           <h1 className="text-4xl font-black">Nicht gefunden</h1>
           <p className="mt-3 text-muted-foreground">{error}</p>
-          <a
+          <Link
             href="/"
             className="mt-6 inline-block font-black text-primary underline"
           >
             Eigenes Ranking erstellen
-          </a>
+          </Link>
         </div>
       </main>
     );
@@ -776,7 +777,7 @@ export function RankingVote({ slug }: { slug: string }) {
             <Button
               className="h-12 border-2 border-foreground px-5 font-black shadow-[3px_3px_0_var(--ink)]"
               onClick={() => {
-                window.location.href = `/r/${slug}/results`;
+                window.location.assign(`/r/${slug}/results`);
               }}
             >
               <BarChart3 /> Auswertung ansehen

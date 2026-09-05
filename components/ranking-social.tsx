@@ -105,12 +105,13 @@ export function RankingSocial({
   }, [slug]);
 
   useEffect(() => {
+    // oxlint-disable-next-line react/react-compiler -- standard fetch-on-mount: `load` sets loading/social/error state as it runs
     void load();
   }, [load]);
 
   function requireLogin() {
     if (social?.signedIn) return false;
-    if (social?.signInPath) window.location.href = social.signInPath;
+    if (social?.signInPath) window.location.assign(social.signInPath);
     return true;
   }
 
@@ -134,7 +135,7 @@ export function RankingSocial({
         signInPath?: string;
       };
       if (response.status === 401 && data.signInPath) {
-        window.location.href = data.signInPath;
+        window.location.assign(data.signInPath);
         return;
       }
       if (!response.ok)
@@ -153,7 +154,7 @@ export function RankingSocial({
     }
   }
 
-  async function submitComment(event: React.FormEvent) {
+  async function submitComment(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!comment.trim() || requireLogin()) return;
     setPending('comment');
@@ -169,7 +170,7 @@ export function RankingSocial({
         signInPath?: string;
       };
       if (response.status === 401 && data.signInPath) {
-        window.location.href = data.signInPath;
+        window.location.assign(data.signInPath);
         return;
       }
       if (!response.ok)

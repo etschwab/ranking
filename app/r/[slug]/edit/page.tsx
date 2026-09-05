@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import Link from 'next/link';
 import { requireUser } from '@/app/auth';
 import { BrandHeader } from '@/components/brand-header';
 import { RankingEditForm } from '@/components/ranking-edit-form';
@@ -14,12 +15,12 @@ async function EditRankingContent({ slug }: { slug: string }) {
     <>
       <BrandHeader
         action={
-          <a
+          <Link
             href="/mine"
             className="text-sm font-black text-muted-foreground hover:text-foreground"
           >
             Meine Rankings
-          </a>
+          </Link>
         }
       />
       <section className="mx-auto max-w-4xl px-5 pb-24 pt-12 sm:px-8">

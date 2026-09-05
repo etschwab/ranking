@@ -11,6 +11,11 @@ import {
   registerWithEmail,
 } from '@/db/accounts';
 
+function formString(form: FormData, key: string, fallback = '') {
+  const value = form.get(key);
+  return typeof value === 'string' ? value : fallback;
+}
+
 function redirectToLogin(
   request: Request,
   returnTo: string,
@@ -26,16 +31,14 @@ export async function POST(request: Request) {
   try {
     const form = await request.formData();
     const mode =
-      String(form.get('mode') ?? 'login') === 'register' ? 'register' : 'login';
-    const email = String(form.get('email') ?? '')
+      formString(form, 'mode', 'login') === 'register' ? 'register' : 'login';
+    const email = formString(form, 'email')
       .trim()
       .toLocaleLowerCase('en-US')
       .slice(0, 254);
-    const password = String(form.get('password') ?? '');
-    const displayName = String(form.get('displayName') ?? '')
-      .trim()
-      .slice(0, 50);
-    const returnTo = safeReturnPath(String(form.get('returnTo') ?? '/'));
+    const password = formString(form, 'password');
+    const displayName = formString(form, 'displayName').trim().slice(0, 50);
+    const returnTo = safeReturnPath(formString(form, 'returnTo', '/'));
     failureReturnTo = returnTo;
     if (
       !/^\S+@\S+\.\S+$/.test(email) ||

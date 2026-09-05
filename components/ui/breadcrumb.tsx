@@ -63,6 +63,7 @@ function BreadcrumbPage({ className, ...props }: React.ComponentProps<'span'>) {
   return (
     <span
       data-slot="breadcrumb-page"
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- current page is intentionally not a navigable <a>
       role="link"
       aria-disabled="true"
       aria-current="page"

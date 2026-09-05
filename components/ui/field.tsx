@@ -76,6 +76,7 @@ function Field({
 }: React.ComponentProps<'div'> & VariantProps<typeof fieldVariants>) {
   return (
     <div
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- visual grouping wrapper, not a semantic <fieldset>
       role="group"
       data-slot="field"
       data-orientation={orientation}

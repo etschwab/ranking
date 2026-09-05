@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import {
   BarChart3,
   Clock3,
@@ -29,13 +30,13 @@ export default async function MyRankingsPage() {
       <BrandHeader
         action={
           <div className="flex items-center gap-3">
-            <a
+            <Link
               href="/profile"
               className="flex items-center gap-2 text-sm font-black"
             >
               <UserRound className="size-4" />
               <span className="hidden sm:inline">{profile.displayName}</span>
-            </a>
+            </Link>
             <a
               href={signOutPath('/')}
               target="_top"
@@ -59,12 +60,12 @@ export default async function MyRankingsPage() {
               Ergebnisse öffnen oder den Abstimmungslink erneut teilen.
             </p>
           </div>
-          <a
+          <Link
             href="/#erstellen"
             className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border-2 border-foreground bg-primary px-5 font-black text-primary-foreground shadow-[3px_3px_0_var(--ink)]"
           >
             <Plus className="size-5" /> Neues Ranking
-          </a>
+          </Link>
         </div>
 
         {rankings.length === 0 ? (
@@ -79,6 +80,7 @@ export default async function MyRankingsPage() {
             {rankings.map((ranking, index) => {
               const closed =
                 !ranking.isOpen ||
+                // oxlint-disable-next-line react/react-compiler -- this is a Server Component; it renders once per request, not a memoized client render
                 (ranking.closesAt !== null && Date.now() >= ranking.closesAt);
               const AccessIcon =
                 ranking.accessMode === 'password'

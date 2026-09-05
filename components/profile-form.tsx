@@ -18,7 +18,7 @@ export function ProfileForm({
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: React.SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setSaved(false);
