@@ -152,7 +152,7 @@ function ChartTooltipContent({
     }
 
     const [item] = payload;
-    const key = `${labelKey ?? item?.dataKey ?? item?.name ?? 'value'}`;
+    const key = labelKey ?? toConfigKey(item?.dataKey ?? item?.name, 'value');
     const itemConfig = getPayloadConfigFromPayload(config, item, key);
     const value =
       !labelKey && typeof label === 'string'
@@ -200,7 +200,8 @@ function ChartTooltipContent({
         {payload
           .filter((item) => item.type !== 'none')
           .map((item, index) => {
-            const key = `${nameKey ?? item.name ?? item.dataKey ?? 'value'}`;
+            const key =
+              nameKey ?? toConfigKey(item.name ?? item.dataKey, 'value');
             const itemConfig = getPayloadConfigFromPayload(config, item, key);
             const indicatorColor = color ?? item.payload?.fill ?? item.color;
 
@@ -299,7 +300,7 @@ function ChartLegendContent({
       {payload
         .filter((item) => item.type !== 'none')
         .map((item, index) => {
-          const key = `${nameKey ?? item.dataKey ?? 'value'}`;
+          const key = nameKey ?? toConfigKey(item.dataKey, 'value');
           const itemConfig = getPayloadConfigFromPayload(config, item, key);
 
           return (
@@ -325,6 +326,15 @@ function ChartLegendContent({
         })}
     </div>
   );
+}
+
+// Recharts types dataKey/name/label as `string | number | ReactNode | ((...) => ...)`
+// depending on the chart type, but the values chart data actually carries are always
+// strings or numbers - this keeps the config lookup key readable either way.
+function toConfigKey(value: unknown, fallback: string) {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return String(value);
+  return fallback;
 }
 
 function getPayloadConfigFromPayload(

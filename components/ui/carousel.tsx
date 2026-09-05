@@ -95,6 +95,7 @@ function Carousel({
 
   React.useEffect(() => {
     if (!api) return;
+    // oxlint-disable-next-line react/react-compiler -- initializes scroll-button state from the embla API on mount, then subscribes to its events; embla has no synchronous getter usable during render
     onSelect(api);
     api.on('reInit', onSelect);
     api.on('select', onSelect);
@@ -121,6 +122,7 @@ function Carousel({
       <div
         onKeyDownCapture={handleKeyDown}
         className={cn('relative', className)}
+        // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- carousel viewport wrapper, not a semantic <section>
         role="region"
         aria-roledescription="carousel"
         data-slot="carousel"
@@ -158,6 +160,7 @@ function CarouselItem({ className, ...props }: React.ComponentProps<'div'>) {
 
   return (
     <div
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- carousel slide wrapper, not a semantic <fieldset>
       role="group"
       aria-roledescription="slide"
       data-slot="carousel-item"

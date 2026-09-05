@@ -11,5 +11,14 @@ export function CopyLinkButton({ path }: { path: string }) {
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
   }
-  return <Button variant="outline" onClick={copy} className="border-2 border-foreground font-black">{copied ? <CheckCircle2 /> : <Copy />} {copied ? 'Kopiert' : 'Link kopieren'}</Button>;
+  return (
+    <Button
+      variant="outline"
+      onClick={copy}
+      className="border-2 border-foreground font-black"
+    >
+      {copied ? <CheckCircle2 /> : <Copy />}{' '}
+      {copied ? 'Kopiert' : 'Link kopieren'}
+    </Button>
+  );
 }
