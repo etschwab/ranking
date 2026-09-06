@@ -5,12 +5,8 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   BarChart3,
-  BriefcaseBusiness,
   Check,
-  Clapperboard,
   Clock3,
-  Gamepad2,
-  Gift,
   Globe2,
   KeyRound,
   Link2,
@@ -18,16 +14,15 @@ import {
   LockKeyhole,
   LogIn,
   Mail,
-  MapPinned,
   Plus,
   Save,
   Share2,
   Sparkles,
   Trophy,
-  Utensils,
   UserRound,
   WandSparkles,
 } from 'lucide-react';
+import { findRankingTemplate, rankingTemplates } from '@/lib/templates';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -37,75 +32,6 @@ const demoTiers = [
   { label: 'A', color: 'var(--tier-a)', items: ['Dune: Part Two'] },
   { label: 'B', color: 'var(--tier-b)', items: ['Barbie', 'The Batman'] },
   { label: 'C', color: 'var(--tier-c)', items: ['Tenet'] },
-];
-
-const creatorPresets = [
-  {
-    label: 'Reiseziele',
-    icon: MapPinned,
-    title: 'Unser nächstes Reiseziel',
-    description: 'Wohin soll unser nächster gemeinsamer Trip gehen?',
-    options: ['Japan', 'Island', 'Portugal', 'Kanada', 'Griechenland'],
-  },
-  {
-    label: 'Filmabend',
-    icon: Clapperboard,
-    title: 'Filmabend',
-    description: 'Was schauen wir als Nächstes?',
-    options: [
-      'Dune: Part Two',
-      'Parasite',
-      'Interstellar',
-      'Barbie',
-      'The Batman',
-    ],
-  },
-  {
-    label: 'Restaurants',
-    icon: Utensils,
-    title: 'Wo gehen wir essen?',
-    description: 'Unser nächstes gemeinsames Dinner.',
-    options: [
-      'Italienisch',
-      'Japanisch',
-      'Mexikanisch',
-      'Indisch',
-      'Libanesisch',
-    ],
-  },
-  {
-    label: 'Games',
-    icon: Gamepad2,
-    title: 'Unsere besten Games',
-    description: 'Welche Spiele gehören ganz nach oben?',
-    options: [
-      'Minecraft',
-      'The Legend of Zelda',
-      'Baldur’s Gate 3',
-      'Mario Kart',
-      'Fortnite',
-    ],
-  },
-  {
-    label: 'Bewerber',
-    icon: BriefcaseBusiness,
-    title: 'Bewerber vergleichen',
-    description: 'Gemeinsame Einschätzung für die nächste Besetzung.',
-    options: ['Bewerber A', 'Bewerber B', 'Bewerber C', 'Bewerber D'],
-  },
-  {
-    label: 'Geschenkideen',
-    icon: Gift,
-    title: 'Die besten Geschenkideen',
-    description: 'Welche Idee macht am meisten Freude?',
-    options: [
-      'Gemeinsamer Ausflug',
-      'Fotobuch',
-      'Konzerttickets',
-      'Wellness',
-      'Lieblingsrestaurant',
-    ],
-  },
 ];
 
 export default function Home() {
@@ -177,7 +103,17 @@ export default function Home() {
     } catch {
       /* Ignore invalid local drafts. */
     }
+    const templateSlug = new URLSearchParams(window.location.search).get(
+      'template',
+    );
+    const template = templateSlug ? findRankingTemplate(templateSlug) : null;
+    if (template) {
+      setTitle(template.title);
+      setDescription(template.description);
+      setOptions(template.options.join('\n'));
+    }
     setDraftReady(true);
+    // oxlint-disable-next-line react/react-compiler -- one-time setup: reads localStorage/URL, both only available client-side, so this can't run during render
   }, []);
 
   useEffect(() => {
@@ -188,7 +124,7 @@ export default function Home() {
     );
   }, [accessMode, closesAt, description, draftReady, options, title]);
 
-  function applyPreset(preset: (typeof creatorPresets)[number]) {
+  function applyPreset(preset: (typeof rankingTemplates)[number]) {
     setTitle(preset.title);
     setDescription(preset.description);
     setOptions(preset.options.join('\n'));
@@ -441,16 +377,24 @@ export default function Home() {
             onSubmit={createRanking}
           >
             <div className="rounded-xl border-2 border-foreground bg-[#f7f3eb] p-4">
-              <div className="flex items-center gap-2">
-                <WandSparkles className="size-5 text-primary" />
-                <p className="text-sm font-black">
-                  Schnell starten mit einer Vorlage
-                </p>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <WandSparkles className="size-5 text-primary" />
+                  <p className="text-sm font-black">
+                    Schnell starten mit einer Vorlage
+                  </p>
+                </div>
+                <Link
+                  href="/vorlagen"
+                  className="text-xs font-black text-primary underline underline-offset-4"
+                >
+                  Alle Vorlagen
+                </Link>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                {creatorPresets.map((preset) => (
+                {rankingTemplates.slice(0, 6).map((preset) => (
                   <button
-                    key={preset.label}
+                    key={preset.slug}
                     type="button"
                     onClick={() => applyPreset(preset)}
                     className="inline-flex h-9 items-center gap-2 rounded-lg border-2 border-foreground bg-card px-3 text-sm font-black shadow-[2px_2px_0_var(--ink)] transition hover:-translate-y-0.5"
