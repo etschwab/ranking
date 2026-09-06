@@ -9,6 +9,7 @@ import {
   Copy,
   Crown,
   Download,
+  FileSpreadsheet,
   FileText,
   GitCompare,
   Image as ImageIcon,
@@ -52,6 +53,14 @@ function scoreDeviation(item: RankingItem) {
       0,
     ) / item.votes;
   return Math.sqrt(variance);
+}
+
+function csvCell(value: string | number) {
+  return `"${String(value).replaceAll('"', '""')}"`;
+}
+
+function toCsv(rows: (string | number)[][]) {
+  return `﻿${rows.map((row) => row.map(csvCell).join(';')).join('\n')}`;
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -222,8 +231,6 @@ export function RankingResults({ slug }: { slug: string }) {
 
   function exportCsv() {
     if (!ranking) return;
-    const escapeCell = (value: string | number) =>
-      `"${String(value).replaceAll('"', '""')}"`;
     const rows: (string | number)[][] = [
       [
         'Rang',
@@ -253,10 +260,41 @@ export function RankingResults({ slug }: { slug: string }) {
         ),
       ]),
     ];
-    const csv = `\uFEFF${rows.map((row) => row.map(escapeCell).join(';')).join('\n')}`;
     downloadBlob(
-      new Blob([csv], { type: 'text/csv;charset=utf-8' }),
+      new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }),
       `${ranking.slug}-auswertung.csv`,
+    );
+  }
+
+  /**
+   * One row per (participant, item) vote in tidy/long format - unlike exportCsv's
+   * summary matrix, this is meant for further analysis (pivot tables, own scripts)
+   * in a spreadsheet tool: every ballot, its timestamp, and each item's tier and
+   * position within that tier.
+   */
+  function exportRawVotesCsv() {
+    if (!ranking) return;
+    const rows: (string | number)[][] = [
+      ['Teilnehmer', 'Abgestimmt am', 'Option', 'Stufe', 'Position in Stufe'],
+      ...participants.flatMap((participant) =>
+        ranking.items.map((item) => {
+          const score = participant.scores[item.id];
+          const tier = ranking.tiers.find(
+            (entry) => entry.score === score?.tier,
+          );
+          return [
+            participant.voterName,
+            new Date(participant.createdAt).toISOString(),
+            item.label,
+            tier?.label ?? '',
+            score ? score.rankPosition + 1 : '',
+          ];
+        }),
+      ),
+    ];
+    downloadBlob(
+      new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }),
+      `${ranking.slug}-rohstimmen.csv`,
     );
   }
 
@@ -806,7 +844,8 @@ export function RankingResults({ slug }: { slug: string }) {
                     Ergebnis mitnehmen
                   </h2>
                   <p className="mt-1 font-semibold text-muted-foreground">
-                    Als fertige Grafik, PDF-Bericht oder vollständige CSV-Datei.
+                    Als fertige Grafik, PDF-Bericht, CSV-Auswertung oder
+                    Rohstimmen für die eigene Analyse.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -829,6 +868,13 @@ export function RankingResults({ slug }: { slug: string }) {
                     className="h-11 border-2 border-foreground font-black shadow-[3px_3px_0_var(--ink)]"
                   >
                     <Download /> CSV
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={exportRawVotesCsv}
+                    className="h-11 border-2 border-foreground bg-card font-black"
+                  >
+                    <FileSpreadsheet /> Rohstimmen (CSV)
                   </Button>
                 </div>
               </div>
