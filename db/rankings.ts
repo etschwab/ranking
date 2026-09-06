@@ -23,6 +23,12 @@ export type RankingParticipant = {
   createdAt: number;
   scores: Record<string, { tier: number; rankPosition: number }>;
 };
+export type RankingEditWarning = {
+  editedAt: number;
+  ballotCountAtEdit: number;
+  itemsAdded: number;
+  itemsRemoved: number;
+};
 export type VotingNameMode = 'required' | 'anonymous';
 export type ResultsVisibility = 'always' | 'after_vote' | 'after_close';
 export type RankingData = {
@@ -44,6 +50,7 @@ export type RankingData = {
   ballotCount: number;
   tiers: RankingTier[];
   items: RankingItem[];
+  editWarning: RankingEditWarning | null;
 };
 export type RankingAccessMode = 'public' | 'password' | 'invite';
 export type OwnedRankingData = RankingData & {
@@ -141,6 +148,9 @@ export async function ensureSchema() {
           "CREATE TABLE IF NOT EXISTS reactions (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, target_type TEXT NOT NULL CHECK(target_type IN ('item', 'comment')), target_id TEXT NOT NULL, user_id TEXT NOT NULL, emoji TEXT NOT NULL, created_at BIGINT NOT NULL)",
         ),
         db.prepare(
+          'CREATE TABLE IF NOT EXISTS ranking_edit_log (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, edited_at BIGINT NOT NULL, ballot_count INTEGER NOT NULL, items_added INTEGER NOT NULL, items_removed INTEGER NOT NULL)',
+        ),
+        db.prepare(
           'CREATE INDEX IF NOT EXISTS idx_ranking_tiers_position ON ranking_tiers(ranking_id, position)',
         ),
         db.prepare(
@@ -166,6 +176,9 @@ export async function ensureSchema() {
         ),
         db.prepare(
           'CREATE UNIQUE INDEX IF NOT EXISTS idx_reactions_unique ON reactions(ranking_id, target_type, target_id, user_id, emoji)',
+        ),
+        db.prepare(
+          'CREATE INDEX IF NOT EXISTS idx_ranking_edit_log_ranking ON ranking_edit_log(ranking_id, edited_at)',
         ),
       ],
       'base',
@@ -363,40 +376,52 @@ export async function getRanking(slug: string): Promise<RankingData | null> {
       hasPreviewImage: number;
     }>();
   if (!ranking) return null;
-  const [tierRows, itemRows, ballotRow, scoreRows] = await Promise.all([
-    db
-      .prepare(
-        'SELECT id, label, color, position FROM ranking_tiers WHERE ranking_id = ? ORDER BY position',
-      )
-      .bind(ranking.id)
-      .all<{ id: string; label: string; color: string; position: number }>(),
-    db
-      .prepare(
-        'SELECT id, label, image_data AS imageData, position FROM items WHERE ranking_id = ? ORDER BY position',
-      )
-      .bind(ranking.id)
-      .all<{
-        id: string;
-        label: string;
-        imageData: string | null;
-        position: number;
-      }>(),
-    db
-      .prepare('SELECT COUNT(*) AS count FROM ballots WHERE ranking_id = ?')
-      .bind(ranking.id)
-      .first<{ count: number }>(),
-    db
-      .prepare(
-        'SELECT s.item_id AS itemId, s.tier, COUNT(*) AS count, AVG(s.rank_position) AS averageRankPosition FROM scores s JOIN items i ON i.id = s.item_id WHERE i.ranking_id = ? GROUP BY s.item_id, s.tier',
-      )
-      .bind(ranking.id)
-      .all<{
-        itemId: string;
-        tier: number;
-        count: number;
-        averageRankPosition: number;
-      }>(),
-  ]);
+  const [tierRows, itemRows, ballotRow, scoreRows, editLogRow] =
+    await Promise.all([
+      db
+        .prepare(
+          'SELECT id, label, color, position FROM ranking_tiers WHERE ranking_id = ? ORDER BY position',
+        )
+        .bind(ranking.id)
+        .all<{ id: string; label: string; color: string; position: number }>(),
+      db
+        .prepare(
+          'SELECT id, label, image_data AS imageData, position FROM items WHERE ranking_id = ? ORDER BY position',
+        )
+        .bind(ranking.id)
+        .all<{
+          id: string;
+          label: string;
+          imageData: string | null;
+          position: number;
+        }>(),
+      db
+        .prepare('SELECT COUNT(*) AS count FROM ballots WHERE ranking_id = ?')
+        .bind(ranking.id)
+        .first<{ count: number }>(),
+      db
+        .prepare(
+          'SELECT s.item_id AS itemId, s.tier, COUNT(*) AS count, AVG(s.rank_position) AS averageRankPosition FROM scores s JOIN items i ON i.id = s.item_id WHERE i.ranking_id = ? GROUP BY s.item_id, s.tier',
+        )
+        .bind(ranking.id)
+        .all<{
+          itemId: string;
+          tier: number;
+          count: number;
+          averageRankPosition: number;
+        }>(),
+      db
+        .prepare(
+          'SELECT edited_at AS editedAt, ballot_count AS ballotCount, items_added AS itemsAdded, items_removed AS itemsRemoved FROM ranking_edit_log WHERE ranking_id = ? ORDER BY edited_at DESC LIMIT 1',
+        )
+        .bind(ranking.id)
+        .first<{
+          editedAt: number;
+          ballotCount: number;
+          itemsAdded: number;
+          itemsRemoved: number;
+        }>(),
+    ]);
   const tierCount = tierRows.results.length;
   const grouped = new Map<
     string,
@@ -431,6 +456,14 @@ export async function getRanking(slug: string): Promise<RankingData | null> {
     canViewResults: true,
     viewerHasVoted: false,
     ballotCount: Number(ballotRow?.count ?? 0),
+    editWarning: editLogRow
+      ? {
+          editedAt: Number(editLogRow.editedAt),
+          ballotCountAtEdit: Number(editLogRow.ballotCount),
+          itemsAdded: Number(editLogRow.itemsAdded),
+          itemsRemoved: Number(editLogRow.itemsRemoved),
+        }
+      : null,
     tiers: tierRows.results.map((tier) => ({
       ...tier,
       score: tierCount - tier.position,
@@ -568,7 +601,7 @@ export async function updateOwnedRanking(
     }>();
   if (!ranking) return false;
 
-  const [existingItems, existingTiers] = await Promise.all([
+  const [existingItems, existingTiers, ballotCountRow] = await Promise.all([
     db
       .prepare('SELECT id FROM items WHERE ranking_id = ?')
       .bind(ranking.id)
@@ -579,11 +612,35 @@ export async function updateOwnedRanking(
       )
       .bind(ranking.id)
       .all<{ id: string; position: number }>(),
+    db
+      .prepare('SELECT COUNT(*) AS count FROM ballots WHERE ranking_id = ?')
+      .bind(ranking.id)
+      .first<{ count: number }>(),
   ]);
+  const ballotCountBeforeEdit = Number(ballotCountRow?.count ?? 0);
   const itemIds = new Set(existingItems.results.map((item) => item.id));
   const keptItems = input.items.flatMap((item) =>
     item.id && itemIds.has(item.id) ? [item.id] : [],
   );
+  const itemsRemoved = existingItems.results.length - keptItems.length;
+  const itemsAdded = input.items.filter(
+    (item) => !item.id || !itemIds.has(item.id),
+  ).length;
+  const logEdit =
+    ballotCountBeforeEdit > 0 && (itemsRemoved > 0 || itemsAdded > 0)
+      ? db
+          .prepare(
+            'INSERT INTO ranking_edit_log (id, ranking_id, edited_at, ballot_count, items_added, items_removed) VALUES (?, ?, ?, ?, ?, ?)',
+          )
+          .bind(
+            crypto.randomUUID(),
+            ranking.id,
+            Date.now(),
+            ballotCountBeforeEdit,
+            itemsAdded,
+            itemsRemoved,
+          )
+      : null;
   const itemPlaceholders = keptItems.map(() => '?').join(', ');
   const deleteScores = keptItems.length
     ? db
@@ -676,6 +733,7 @@ export async function updateOwnedRanking(
       : input.previewImageData;
 
   await db.batch([
+    ...(logEdit ? [logEdit] : []),
     db
       .prepare(
         'UPDATE rankings SET slug = ?, title = ?, description = ?, is_open = ?, closes_at = ?, access_mode = ?, password_hash = ?, invite_token = ?, access_token = ?, name_mode = ?, one_vote_per_user = ?, results_visibility = ?, vote_pin_hash = ?, vote_pin_token = ?, preview_image_data = ? WHERE id = ?',

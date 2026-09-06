@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Share2,
   Sparkles,
+  TriangleAlert,
   Users,
   Zap,
 } from 'lucide-react';
@@ -507,6 +508,33 @@ export function RankingResults({ slug }: { slug: string }) {
             </span>
           )}
         </div>
+
+        {ranking.editWarning && (
+          <div className="mt-6 flex items-start gap-3 rounded-xl border-2 border-[#a3690f] bg-[#fff1a8] p-4">
+            <TriangleAlert className="mt-0.5 size-5 shrink-0 text-[#8a5a0d]" />
+            <p className="text-sm font-semibold text-[#5c3d09]">
+              Die Optionen wurden am{' '}
+              {new Date(ranking.editWarning.editedAt).toLocaleString('de-CH', {
+                dateStyle: 'medium',
+                timeStyle: 'short',
+              })}{' '}
+              bearbeitet (
+              {ranking.editWarning.itemsAdded > 0 &&
+                `${ranking.editWarning.itemsAdded} hinzugefügt`}
+              {ranking.editWarning.itemsAdded > 0 &&
+                ranking.editWarning.itemsRemoved > 0 &&
+                ', '}
+              {ranking.editWarning.itemsRemoved > 0 &&
+                `${ranking.editWarning.itemsRemoved} entfernt`}
+              ), nachdem bereits {ranking.editWarning.ballotCountAtEdit}{' '}
+              {ranking.editWarning.ballotCountAtEdit === 1
+                ? 'Stimme'
+                : 'Stimmen'}{' '}
+              abgegeben wurden. Ältere Stimmen beziehen sich möglicherweise
+              nicht mehr auf die aktuellen Optionen.
+            </p>
+          </div>
+        )}
 
         {!ranking.canViewResults ? (
           <div className="mt-12 rounded-[1.75rem] border-[3px] border-foreground bg-card p-10 text-center shadow-[7px_7px_0_var(--ink)]">
