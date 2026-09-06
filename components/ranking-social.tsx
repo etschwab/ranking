@@ -1,7 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { LogIn, MessageCircle, RefreshCw, Send, SmilePlus } from 'lucide-react';
+import {
+  CornerDownRight,
+  LogIn,
+  MessageCircle,
+  RefreshCw,
+  Send,
+  SmilePlus,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { RankingItem } from '@/db/rankings';
@@ -79,6 +86,8 @@ export function RankingSocial({
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState('');
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyBody, setReplyBody] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -154,16 +163,19 @@ export function RankingSocial({
     }
   }
 
-  async function submitComment(event: React.SubmitEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!comment.trim() || requireLogin()) return;
-    setPending('comment');
+  async function postComment(
+    body: string,
+    parentId: string | undefined,
+    pendingKey: string,
+  ) {
+    if (!body.trim() || requireLogin()) return false;
+    setPending(pendingKey);
     setError('');
     try {
       const response = await fetch(`/api/rankings/${slug}/comments`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ body: comment }),
+        body: JSON.stringify({ body, parentId }),
       });
       const data = (await response.json()) as {
         error?: string;
@@ -171,22 +183,39 @@ export function RankingSocial({
       };
       if (response.status === 401 && data.signInPath) {
         window.location.assign(data.signInPath);
-        return;
+        return false;
       }
       if (!response.ok)
         throw new Error(
           data.error ?? 'Kommentar konnte nicht gesendet werden.',
         );
-      setComment('');
       await load();
+      return true;
     } catch (reason) {
       setError(
         reason instanceof Error
           ? reason.message
           : 'Kommentar konnte nicht gesendet werden.',
       );
+      return false;
     } finally {
       setPending('');
+    }
+  }
+
+  async function submitComment(event: React.SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (await postComment(comment, undefined, 'comment')) setComment('');
+  }
+
+  async function submitReply(
+    event: React.SubmitEvent<HTMLFormElement>,
+    parentId: string,
+  ) {
+    event.preventDefault();
+    if (await postComment(replyBody, parentId, `reply:${parentId}`)) {
+      setReplyBody('');
+      setReplyingTo(null);
     }
   }
 
@@ -301,14 +330,99 @@ export function RankingSocial({
               <p className="mt-2 whitespace-pre-wrap break-words font-medium leading-relaxed">
                 {entry.body}
               </p>
-              <div className="mt-3">
+              <div className="mt-3 flex flex-wrap items-center gap-3">
                 <ReactionButtons
                   label={`Kommentar von ${entry.authorName}`}
                   reactions={entry.reactions}
                   disabled={pending.startsWith(`comment:${entry.id}:`)}
                   onReact={(emoji) => void react('comment', entry.id, emoji)}
                 />
+                {social.signedIn && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReplyingTo(replyingTo === entry.id ? null : entry.id)
+                    }
+                    className="inline-flex items-center gap-1.5 text-xs font-black text-muted-foreground hover:text-foreground"
+                  >
+                    <CornerDownRight className="size-3.5" /> Antworten
+                  </button>
+                )}
               </div>
+
+              {entry.replies.length > 0 && (
+                <div className="mt-4 space-y-3 border-l-2 border-foreground/15 pl-4">
+                  {entry.replies.map((reply) => (
+                    <div key={reply.id}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-black">{reply.authorName}</p>
+                        <time
+                          className="text-xs font-bold text-muted-foreground"
+                          dateTime={new Date(reply.createdAt).toISOString()}
+                        >
+                          {new Date(reply.createdAt).toLocaleString('de-CH', {
+                            dateStyle: 'medium',
+                            timeStyle: 'short',
+                          })}
+                        </time>
+                      </div>
+                      <p className="mt-1 whitespace-pre-wrap break-words font-medium leading-relaxed">
+                        {reply.body}
+                      </p>
+                      <div className="mt-2">
+                        <ReactionButtons
+                          label={`Antwort von ${reply.authorName}`}
+                          reactions={reply.reactions}
+                          disabled={pending.startsWith(`comment:${reply.id}:`)}
+                          onReact={(emoji) =>
+                            void react('comment', reply.id, emoji)
+                          }
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {replyingTo === entry.id && (
+                <form
+                  onSubmit={(event) => void submitReply(event, entry.id)}
+                  className="mt-4 grid gap-2 border-l-2 border-foreground/15 pl-4"
+                >
+                  <Textarea
+                    value={replyBody}
+                    onChange={(event) => setReplyBody(event.target.value)}
+                    maxLength={500}
+                    required
+                    placeholder={`Antwort an ${entry.authorName}…`}
+                    className="min-h-16 border-2 border-foreground bg-card px-3 py-2 text-sm"
+                  />
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setReplyingTo(null);
+                        setReplyBody('');
+                      }}
+                      className="h-9 border-2 border-foreground bg-card px-3 text-sm font-black"
+                    >
+                      Abbrechen
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={
+                        !replyBody.trim() || pending === `reply:${entry.id}`
+                      }
+                      className="h-9 border-2 border-foreground px-3 text-sm font-black shadow-[2px_2px_0_var(--ink)]"
+                    >
+                      {pending === `reply:${entry.id}`
+                        ? 'Wird gesendet…'
+                        : 'Antworten'}
+                    </Button>
+                  </div>
+                </form>
+              )}
             </article>
           ))}
           {!loading && social?.comments.length === 0 && (

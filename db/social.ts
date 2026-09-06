@@ -13,6 +13,7 @@ export type RankingComment = {
   body: string;
   createdAt: number;
   reactions: ReactionSummary[];
+  replies: RankingComment[];
 };
 export type RankingSocial = {
   itemReactions: Record<string, ReactionSummary[]>;
@@ -35,6 +36,44 @@ function summary(row: ReactionRow): ReactionSummary {
   };
 }
 
+export type CommentRow = {
+  id: string;
+  parentId: string | null;
+  authorName: string;
+  body: string;
+  createdAt: number;
+};
+
+/**
+ * Nests replies under their parent comment. `rows` must be sorted oldest-first
+ * so that, once grouped, each thread's replies are already in chronological
+ * order - only the top-level threads get flipped to newest-first for display.
+ * A reply whose parent isn't found (deleted, or outside the fetched window)
+ * falls back to being shown as a top-level comment rather than disappearing.
+ */
+export function buildCommentTree(
+  rows: CommentRow[],
+  reactionsByTarget: Map<string, ReactionSummary[]>,
+): RankingComment[] {
+  const byId = new Map<string, RankingComment>();
+  const topLevel: RankingComment[] = [];
+  for (const row of rows) {
+    const comment: RankingComment = {
+      id: row.id,
+      authorName: row.authorName,
+      body: row.body,
+      createdAt: Number(row.createdAt),
+      reactions: reactionsByTarget.get(`comment:${row.id}`) ?? [],
+      replies: [],
+    };
+    byId.set(comment.id, comment);
+    const parent = row.parentId ? byId.get(row.parentId) : undefined;
+    if (parent) parent.replies.push(comment);
+    else topLevel.push(comment);
+  }
+  return topLevel.reverse();
+}
+
 export async function getRankingSocial(
   slug: string,
   viewerId?: string,
@@ -48,15 +87,10 @@ export async function getRankingSocial(
   const [commentRows, reactionRows] = await Promise.all([
     db
       .prepare(
-        'SELECT id, author_name AS authorName, body, created_at AS createdAt FROM comments WHERE ranking_id = ? ORDER BY created_at DESC LIMIT 100',
+        'SELECT id, parent_id AS parentId, author_name AS authorName, body, created_at AS createdAt FROM comments WHERE ranking_id = ? ORDER BY created_at ASC LIMIT 500',
       )
       .bind(ranking.id)
-      .all<{
-        id: string;
-        authorName: string;
-        body: string;
-        createdAt: number;
-      }>(),
+      .all<CommentRow>(),
     db
       .prepare(`
       SELECT target_type AS targetType, target_id AS targetId, emoji, COUNT(*) AS count,
@@ -80,12 +114,10 @@ export async function getRankingSocial(
       .filter(([key]) => key.startsWith('item:'))
       .map(([key, value]) => [key.slice(5), value]),
   );
-  const comments = commentRows.results.map((comment) => ({
-    ...comment,
-    createdAt: Number(comment.createdAt),
-    reactions: grouped.get(`comment:${comment.id}`) ?? [],
-  }));
-  return { itemReactions, comments };
+  return {
+    itemReactions,
+    comments: buildCommentTree(commentRows.results, grouped),
+  };
 }
 
 export async function addRankingComment(
@@ -93,6 +125,7 @@ export async function addRankingComment(
   userId: string,
   authorName: string,
   body: string,
+  parentId?: string,
 ) {
   await ensureSchema();
   const ranking = await db
@@ -100,17 +133,31 @@ export async function addRankingComment(
     .bind(slug)
     .first<{ id: string }>();
   if (!ranking) return null;
+  let resolvedParentId: string | null = null;
+  if (parentId) {
+    const parent = await db
+      .prepare(
+        'SELECT id, parent_id AS parentId FROM comments WHERE id = ? AND ranking_id = ?',
+      )
+      .bind(parentId, ranking.id)
+      .first<{ id: string; parentId: string | null }>();
+    if (!parent) return 'invalid-parent' as const;
+    // Flatten replies-to-replies onto the original thread's top-level comment
+    // instead of nesting further.
+    resolvedParentId = parent.parentId ?? parent.id;
+  }
   const comment = {
     id: crypto.randomUUID(),
     rankingId: ranking.id,
     userId,
     authorName,
     body,
+    parentId: resolvedParentId,
     createdAt: Date.now(),
   };
   await db
     .prepare(
-      'INSERT INTO comments (id, ranking_id, user_id, author_name, body, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO comments (id, ranking_id, user_id, author_name, body, created_at, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
     )
     .bind(
       comment.id,
@@ -119,6 +166,7 @@ export async function addRankingComment(
       comment.authorName,
       comment.body,
       comment.createdAt,
+      comment.parentId,
     )
     .run();
   return comment.id;

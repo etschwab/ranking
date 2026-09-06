@@ -24,9 +24,16 @@ export async function POST(request: Request, { params }: RouteContext) {
       { error: 'Dieses Ranking ist privat.' },
       { status: 403 },
     );
-  const value = (await request.json()) as { body?: unknown };
+  const value = (await request.json()) as {
+    body?: unknown;
+    parentId?: unknown;
+  };
   const body =
     typeof value.body === 'string' ? value.body.trim().slice(0, 500) : '';
+  const parentId =
+    typeof value.parentId === 'string' && value.parentId
+      ? value.parentId
+      : undefined;
   if (!body)
     return Response.json(
       { error: 'Schreibe zuerst einen Kommentar.' },
@@ -38,7 +45,13 @@ export async function POST(request: Request, { params }: RouteContext) {
     user.userId,
     profile.displayName,
     body,
+    parentId,
   );
+  if (id === 'invalid-parent')
+    return Response.json(
+      { error: 'Dieser Kommentar existiert nicht mehr.' },
+      { status: 400 },
+    );
   return id
     ? Response.json({ id }, { status: 201 })
     : Response.json({ error: 'Ranking nicht gefunden.' }, { status: 404 });

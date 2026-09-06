@@ -135,7 +135,7 @@ export async function ensureSchema() {
           'CREATE TABLE IF NOT EXISTS user_profiles (user_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, email TEXT NOT NULL, updated_at BIGINT NOT NULL)',
         ),
         db.prepare(
-          'CREATE TABLE IF NOT EXISTS comments (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, user_id TEXT NOT NULL, author_name TEXT NOT NULL, body TEXT NOT NULL, created_at BIGINT NOT NULL)',
+          'CREATE TABLE IF NOT EXISTS comments (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, user_id TEXT NOT NULL, author_name TEXT NOT NULL, body TEXT NOT NULL, created_at BIGINT NOT NULL, parent_id TEXT REFERENCES comments(id) ON DELETE CASCADE)',
         ),
         db.prepare(
           "CREATE TABLE IF NOT EXISTS reactions (id TEXT PRIMARY KEY, ranking_id TEXT NOT NULL REFERENCES rankings(id) ON DELETE CASCADE, target_type TEXT NOT NULL CHECK(target_type IN ('item', 'comment')), target_id TEXT NOT NULL, user_id TEXT NOT NULL, emoji TEXT NOT NULL, created_at BIGINT NOT NULL)",
@@ -157,6 +157,9 @@ export async function ensureSchema() {
         ),
         db.prepare(
           'CREATE INDEX IF NOT EXISTS idx_comments_ranking_created ON comments(ranking_id, created_at)',
+        ),
+        db.prepare(
+          'CREATE INDEX IF NOT EXISTS idx_comments_parent ON comments(parent_id)',
         ),
         db.prepare(
           'CREATE INDEX IF NOT EXISTS idx_reactions_target ON reactions(ranking_id, target_type, target_id)',
@@ -238,6 +241,9 @@ export async function ensureSchema() {
         ),
         db.prepare(
           'ALTER TABLE scores DROP CONSTRAINT IF EXISTS scores_tier_check',
+        ),
+        db.prepare(
+          'ALTER TABLE comments ADD COLUMN IF NOT EXISTS parent_id TEXT REFERENCES comments(id) ON DELETE CASCADE',
         ),
         db.prepare('ALTER TABLE rankings ALTER COLUMN created_at TYPE BIGINT'),
         db.prepare('ALTER TABLE rankings ALTER COLUMN closes_at TYPE BIGINT'),
