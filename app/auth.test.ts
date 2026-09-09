@@ -5,10 +5,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // replaced with lightweight stand-ins.
 vi.mock('next/headers', () => ({ cookies: vi.fn() }));
 vi.mock('next/navigation', () => ({ redirect: vi.fn() }));
-vi.mock('@/db/client', () => ({ db: { prepare: vi.fn(), batch: vi.fn() } }));
+const run = vi.fn();
+const bind = vi.fn(() => ({ run }));
+const prepare = vi.fn(() => ({ bind }));
+vi.mock('@/db/client', () => ({ db: { prepare, batch: vi.fn() } }));
 vi.mock('@/db/rankings', () => ({ ensureSchema: vi.fn() }));
+const getSsoConfig = vi.fn();
+const refreshSsoToken = vi.fn();
+vi.mock('@/lib/sso', () => ({ getSsoConfig, refreshSsoToken }));
 
-const { safeReturnPath, legacyUserIdFromToken } = await import('./auth');
+const { safeReturnPath, legacyUserIdFromToken, revalidateSsoSession } =
+  await import('./auth');
+
+const fakeConfig = {
+  authUrl: 'https://auth.example',
+  clientId: 'client',
+  clientSecret: 'secret',
+  authorizeEndpoint: 'https://auth.example/authorize',
+  tokenEndpoint: 'https://auth.example/token',
+};
 
 async function signLegacyPayload(payload: string, secret: string) {
   const encoder = new TextEncoder();
@@ -129,5 +144,47 @@ describe('legacyUserIdFromToken', () => {
     await expect(
       legacyUserIdFromToken(`${payload}.${signature}`),
     ).resolves.toBeNull();
+  });
+});
+
+describe('revalidateSsoSession', () => {
+  beforeEach(() => {
+    getSsoConfig.mockReset();
+    refreshSsoToken.mockReset();
+    run.mockClear();
+    bind.mockClear();
+    prepare.mockClear();
+  });
+
+  it('treats the session as valid without calling esch-auth when SSO is not configured', async () => {
+    getSsoConfig.mockReturnValue(null);
+    await expect(revalidateSsoSession('hash', 'refresh')).resolves.toBe(true);
+    expect(refreshSsoToken).not.toHaveBeenCalled();
+  });
+
+  it('ends the session when esch-auth rejects the refresh token (revoked grant)', async () => {
+    getSsoConfig.mockReturnValue(fakeConfig);
+    refreshSsoToken.mockResolvedValue({ tokens: null, invalid: true });
+    await expect(revalidateSsoSession('hash', 'refresh')).resolves.toBe(false);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('keeps the session on a transient/network failure without rotating the stored token', async () => {
+    getSsoConfig.mockReturnValue(fakeConfig);
+    refreshSsoToken.mockResolvedValue({ tokens: null, invalid: false });
+    await expect(revalidateSsoSession('hash', 'refresh')).resolves.toBe(true);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('rotates the stored refresh token and timestamp on a successful check', async () => {
+    getSsoConfig.mockReturnValue(fakeConfig);
+    refreshSsoToken.mockResolvedValue({
+      tokens: { refreshToken: 'new-refresh-token' },
+      invalid: false,
+    });
+    await expect(revalidateSsoSession('hash', 'refresh')).resolves.toBe(true);
+    expect(prepare).toHaveBeenCalledWith(expect.stringContaining('UPDATE auth_sessions'));
+    expect(bind).toHaveBeenCalledWith('new-refresh-token', expect.any(Number), 'hash');
+    expect(run).toHaveBeenCalledTimes(1);
   });
 });
