@@ -183,8 +183,14 @@ describe('revalidateSsoSession', () => {
       invalid: false,
     });
     await expect(revalidateSsoSession('hash', 'refresh')).resolves.toBe(true);
-    expect(prepare).toHaveBeenCalledWith(expect.stringContaining('UPDATE auth_sessions'));
-    expect(bind).toHaveBeenCalledWith('new-refresh-token', expect.any(Number), 'hash');
+    expect(prepare).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE auth_sessions'),
+    );
+    expect(bind).toHaveBeenCalledWith(
+      'new-refresh-token',
+      expect.any(Number),
+      'hash',
+    );
     expect(run).toHaveBeenCalledTimes(1);
   });
 });

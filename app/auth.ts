@@ -129,7 +129,10 @@ export async function deleteUserSession(token: string) {
 // a revoked grant, an expired/unknown refresh token - which is the caller's
 // signal to end the local session too. A network error or an unconfigured SSO
 // environment returns true so the session simply survives to the next check.
-export async function revalidateSsoSession(tokenHashValue: string, ssoRefreshToken: string) {
+export async function revalidateSsoSession(
+  tokenHashValue: string,
+  ssoRefreshToken: string,
+) {
   const config = getSsoConfig();
   if (!config) return true;
 
@@ -175,9 +178,13 @@ export async function getCurrentUser(): Promise<RanklyUser | null> {
   if (
     session.ssoRefreshToken &&
     (!session.ssoRevalidatedAt ||
-      Date.now() - Number(session.ssoRevalidatedAt) > SSO_REVALIDATE_INTERVAL_MS)
+      Date.now() - Number(session.ssoRevalidatedAt) >
+        SSO_REVALIDATE_INTERVAL_MS)
   ) {
-    const stillGranted = await revalidateSsoSession(hash, session.ssoRefreshToken);
+    const stillGranted = await revalidateSsoSession(
+      hash,
+      session.ssoRefreshToken,
+    );
     if (!stillGranted) {
       await deleteUserSession(token);
       return null;

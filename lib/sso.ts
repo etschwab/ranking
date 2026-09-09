@@ -226,10 +226,14 @@ export async function refreshSsoToken(
       signal: AbortSignal.timeout(8_000),
     });
     if (!response.ok) {
-      return { tokens: null, invalid: response.status === 400 || response.status === 401 };
+      return {
+        tokens: null,
+        invalid: response.status === 400 || response.status === 401,
+      };
     }
     const data = (await response.json()) as { refresh_token?: unknown };
-    if (typeof data.refresh_token !== 'string') return { tokens: null, invalid: true };
+    if (typeof data.refresh_token !== 'string')
+      return { tokens: null, invalid: true };
     return { tokens: { refreshToken: data.refresh_token }, invalid: false };
   } catch {
     return { tokens: null, invalid: false };
