@@ -80,14 +80,16 @@ export async function GET(request: Request) {
   }
 
   const redirectUri = `${url.origin}/auth/sso/callback`;
-  const identity = await exchangeSsoCode(config, code, verifier, redirectUri);
-  if (!identity)
+  const exchanged = await exchangeSsoCode(config, code, verifier, redirectUri);
+  if (!exchanged)
     return loginRedirect(
       request,
       nextPath,
       'Die Anmeldebestätigung ist abgelaufen oder konnte nicht eingelöst werden.',
       secure,
     );
+
+  const { identity, refreshToken: ssoRefreshToken } = exchanged;
 
   try {
     const userId = await findOrCreateSsoUser(identity);
@@ -97,7 +99,11 @@ export async function GET(request: Request) {
       userId,
       identity.email.toLocaleLowerCase('en-US'),
     );
-    const token = await createUserSession(userId);
+    // Keeping the ESCH Account refresh token lets getCurrentUser() periodically
+    // check back with esch-auth, so revoking the grant there (or "Überall
+    // abmelden") ends this local session too instead of staying valid for
+    // up to 30 days regardless of what happens in the central account.
+    const token = await createUserSession(userId, ssoRefreshToken);
 
     const headers = new Headers({
       Location: new URL(nextPath, url.origin).toString(),
