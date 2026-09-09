@@ -2,6 +2,13 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { db } from '@/db/client';
 import { ensureSchema } from '@/db/rankings';
+import { getSsoConfig, refreshSsoToken } from '@/lib/sso';
+
+// How stale a session's last check against esch-auth may get before
+// getCurrentUser() checks again. Bounds how long a revoked ESCH Account grant
+// (e.g. via "Überall abmelden") can keep working locally - independent of the
+// session's own 30-day expiry.
+const SSO_REVALIDATE_INTERVAL_MS = 60 * 60 * 1000;
 
 export type RanklyUser = {
   userId: string;
@@ -76,16 +83,25 @@ export async function legacyUserIdFromToken(token: string) {
   }
 }
 
-export async function createUserSession(userId: string) {
+export async function createUserSession(
+  userId: string,
+  ssoRefreshToken?: string | null,
+) {
   await ensureSchema();
   const token = Buffer.from(
     crypto.getRandomValues(new Uint8Array(32)),
   ).toString('base64url');
   await db
     .prepare(
-      'INSERT INTO auth_sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)',
+      'INSERT INTO auth_sessions (token_hash, user_id, expires_at, sso_refresh_token, sso_revalidated_at) VALUES (?, ?, ?, ?, ?)',
     )
-    .bind(await tokenHash(token), userId, Date.now() + sessionDuration * 1000)
+    .bind(
+      await tokenHash(token),
+      userId,
+      Date.now() + sessionDuration * 1000,
+      ssoRefreshToken ?? null,
+      ssoRefreshToken ? Date.now() : null,
+    )
     .run();
   return token;
 }
@@ -107,27 +123,74 @@ export async function deleteUserSession(token: string) {
     .run();
 }
 
+// Checks a session's stored ESCH Account refresh token against esch-auth and
+// rotates it on success (Supabase invalidates the previous refresh token on
+// each use). Returns false only when esch-auth explicitly rejects the token -
+// a revoked grant, an expired/unknown refresh token - which is the caller's
+// signal to end the local session too. A network error or an unconfigured SSO
+// environment returns true so the session simply survives to the next check.
+export async function revalidateSsoSession(
+  tokenHashValue: string,
+  ssoRefreshToken: string,
+) {
+  const config = getSsoConfig();
+  if (!config) return true;
+
+  const result = await refreshSsoToken(config, ssoRefreshToken);
+  if (result.invalid) return false;
+  if (!result.tokens) return true;
+
+  await db
+    .prepare(
+      'UPDATE auth_sessions SET sso_refresh_token = ?, sso_revalidated_at = ? WHERE token_hash = ?',
+    )
+    .bind(result.tokens.refreshToken, Date.now(), tokenHashValue)
+    .run();
+  return true;
+}
+
 export async function getCurrentUser(): Promise<RanklyUser | null> {
   const token = (await cookies()).get(sessionCookieName)?.value;
   if (!token) return null;
   await ensureSchema();
+  const hash = await tokenHash(token);
   const session = await db
     .prepare(`
-    SELECT u.id AS userId, u.display_name AS displayName, u.email, s.expires_at AS expiresAt
+    SELECT u.id AS userId, u.display_name AS displayName, u.email, s.expires_at AS expiresAt,
+           s.sso_refresh_token AS ssoRefreshToken, s.sso_revalidated_at AS ssoRevalidatedAt
     FROM auth_sessions s JOIN users u ON u.id = s.user_id
     WHERE s.token_hash = ?
   `)
-    .bind(await tokenHash(token))
+    .bind(hash)
     .first<{
       userId: string;
       displayName: string;
       email: string;
       expiresAt: number;
+      ssoRefreshToken: string | null;
+      ssoRevalidatedAt: number | null;
     }>();
   if (!session || Number(session.expiresAt) <= Date.now()) {
     if (session) await deleteUserSession(token);
     return null;
   }
+
+  if (
+    session.ssoRefreshToken &&
+    (!session.ssoRevalidatedAt ||
+      Date.now() - Number(session.ssoRevalidatedAt) >
+        SSO_REVALIDATE_INTERVAL_MS)
+  ) {
+    const stillGranted = await revalidateSsoSession(
+      hash,
+      session.ssoRefreshToken,
+    );
+    if (!stillGranted) {
+      await deleteUserSession(token);
+      return null;
+    }
+  }
+
   return {
     userId: session.userId,
     displayName: session.displayName,

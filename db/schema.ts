@@ -62,6 +62,8 @@ export const authSessions = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     expiresAt: integer('expires_at').notNull(),
+    ssoRefreshToken: text('sso_refresh_token'),
+    ssoRevalidatedAt: integer('sso_revalidated_at'),
   },
   (table) => [
     index('idx_auth_sessions_user').on(table.userId),

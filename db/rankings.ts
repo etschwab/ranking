@@ -100,7 +100,7 @@ export async function ensureSchema() {
   try {
     await db
       .prepare(
-        'CREATE TABLE IF NOT EXISTS auth_sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at BIGINT NOT NULL)',
+        'CREATE TABLE IF NOT EXISTS auth_sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, expires_at BIGINT NOT NULL, sso_refresh_token TEXT, sso_revalidated_at BIGINT)',
       )
       .run();
   } catch (error) {
@@ -232,6 +232,12 @@ export async function ensureSchema() {
         db.prepare('ALTER TABLE ballots ADD COLUMN IF NOT EXISTS user_id TEXT'),
         db.prepare(
           'ALTER TABLE users ADD COLUMN IF NOT EXISTS esch_sub TEXT UNIQUE',
+        ),
+        db.prepare(
+          'ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS sso_refresh_token TEXT',
+        ),
+        db.prepare(
+          'ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS sso_revalidated_at BIGINT',
         ),
         db.prepare(
           'ALTER TABLE scores ADD COLUMN IF NOT EXISTS rank_position INTEGER NOT NULL DEFAULT 0',

@@ -151,12 +151,14 @@ function decodeIdentity(accessToken: string): SsoIdentity | null {
   }
 }
 
+export type SsoExchangeResult = { identity: SsoIdentity; refreshToken: string };
+
 export async function exchangeSsoCode(
   config: SsoConfig,
   code: string,
   verifier: string,
   redirectUri: string,
-): Promise<SsoIdentity | null> {
+): Promise<SsoExchangeResult | null> {
   try {
     const credentials = btoa(`${config.clientId}:${config.clientSecret}`);
     const response = await fetch(config.tokenEndpoint, {
@@ -176,12 +178,65 @@ export async function exchangeSsoCode(
       signal: AbortSignal.timeout(8_000),
     });
     if (!response.ok) return null;
-    const data = (await response.json()) as { access_token?: unknown };
-    return typeof data.access_token === 'string'
-      ? decodeIdentity(data.access_token)
-      : null;
+    const data = (await response.json()) as {
+      access_token?: unknown;
+      refresh_token?: unknown;
+    };
+    if (
+      typeof data.access_token !== 'string' ||
+      typeof data.refresh_token !== 'string'
+    )
+      return null;
+    const identity = decodeIdentity(data.access_token);
+    return identity ? { identity, refreshToken: data.refresh_token } : null;
   } catch {
     return null;
+  }
+}
+
+export type SsoRefreshResult =
+  | { tokens: { refreshToken: string }; invalid: false }
+  | { tokens: null; invalid: boolean };
+
+// Used periodically (not on every request) to notice that an ESCH Account grant
+// was revoked - e.g. via esch-auth's "Überall abmelden" - without waiting for the
+// local Rankly session to expire on its own. `invalid: true` means esch-auth
+// rejected the refresh token (revoked/expired/unknown grant): the caller should
+// end the local session too. `invalid: false` with no tokens means the check
+// itself failed (network hiccup, esch-auth briefly down) and should be retried
+// later rather than treated as a revocation.
+export async function refreshSsoToken(
+  config: SsoConfig,
+  refreshToken: string,
+): Promise<SsoRefreshResult> {
+  try {
+    const credentials = btoa(`${config.clientId}:${config.clientSecret}`);
+    const response = await fetch(config.tokenEndpoint, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!response.ok) {
+      return {
+        tokens: null,
+        invalid: response.status === 400 || response.status === 401,
+      };
+    }
+    const data = (await response.json()) as { refresh_token?: unknown };
+    if (typeof data.refresh_token !== 'string')
+      return { tokens: null, invalid: true };
+    return { tokens: { refreshToken: data.refresh_token }, invalid: false };
+  } catch {
+    return { tokens: null, invalid: false };
   }
 }
 
