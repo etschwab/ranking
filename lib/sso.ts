@@ -17,13 +17,15 @@ export type SsoConfig = {
 
 export type SsoIdentity = { sub: string; email: string; displayName: string };
 
+class SsoConfigError extends Error {}
+
 function normalizeOrigin(value: string, variableName: string) {
   const withProtocol = /^https?:\/\//i.test(value) ? value : `https://${value}`;
   let url: URL;
   try {
     url = new URL(withProtocol);
   } catch {
-    throw new Error(`${variableName} ist keine gültige URL.`);
+    throw new SsoConfigError(`${variableName} ist keine gültige URL.`);
   }
   const isLocal =
     url.hostname === 'localhost' ||
@@ -33,40 +35,54 @@ function normalizeOrigin(value: string, variableName: string) {
     process.env.NODE_ENV === 'production' &&
     (url.protocol !== 'https:' || isLocal)
   ) {
-    throw new Error(
+    throw new SsoConfigError(
       `${variableName} muss in Produktion eine öffentliche HTTPS-URL sein.`,
     );
   }
   return url.origin;
 }
 
+/**
+ * Reads and validates the SSO env vars. Never throws: any missing or invalid
+ * value is logged server-side and the app falls back to the local
+ * email/password login instead of crashing the login page in production.
+ */
 export function getSsoConfig(): SsoConfig | null {
-  const authUrlRaw = process.env.NEXT_PUBLIC_AUTH_URL?.trim();
-  const supabaseUrlRaw = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const clientId = process.env.SUPABASE_OAUTH_CLIENT_ID?.trim();
-  const clientSecret = process.env.SUPABASE_OAUTH_CLIENT_SECRET?.trim();
+  try {
+    const authUrlRaw = process.env.NEXT_PUBLIC_AUTH_URL?.trim();
+    const supabaseUrlRaw = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+    const clientId = process.env.SUPABASE_OAUTH_CLIENT_ID?.trim();
+    const clientSecret = process.env.SUPABASE_OAUTH_CLIENT_SECRET?.trim();
 
-  if (!authUrlRaw && !supabaseUrlRaw && !clientId && !clientSecret) return null;
+    if (!authUrlRaw && !supabaseUrlRaw && !clientId && !clientSecret)
+      return null;
 
-  if (!authUrlRaw || !supabaseUrlRaw || !clientId || !clientSecret) {
-    throw new Error(
-      'Für SSO müssen NEXT_PUBLIC_AUTH_URL, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_OAUTH_CLIENT_ID und SUPABASE_OAUTH_CLIENT_SECRET gemeinsam gesetzt sein.',
+    if (!authUrlRaw || !supabaseUrlRaw || !clientId || !clientSecret) {
+      throw new SsoConfigError(
+        'Für SSO müssen NEXT_PUBLIC_AUTH_URL, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_OAUTH_CLIENT_ID und SUPABASE_OAUTH_CLIENT_SECRET gemeinsam gesetzt sein.',
+      );
+    }
+
+    const authUrl = normalizeOrigin(authUrlRaw, 'NEXT_PUBLIC_AUTH_URL');
+    const supabaseUrl = normalizeOrigin(
+      supabaseUrlRaw,
+      'NEXT_PUBLIC_SUPABASE_URL',
     );
+
+    return {
+      authUrl,
+      clientId,
+      clientSecret,
+      authorizeEndpoint: `${supabaseUrl}/auth/v1/oauth/authorize`,
+      tokenEndpoint: `${supabaseUrl}/auth/v1/oauth/token`,
+    };
+  } catch (error) {
+    if (error instanceof SsoConfigError) {
+      console.error(`SSO ist falsch konfiguriert: ${error.message}`);
+      return null;
+    }
+    throw error;
   }
-
-  const authUrl = normalizeOrigin(authUrlRaw, 'NEXT_PUBLIC_AUTH_URL');
-  const supabaseUrl = normalizeOrigin(
-    supabaseUrlRaw,
-    'NEXT_PUBLIC_SUPABASE_URL',
-  );
-
-  return {
-    authUrl,
-    clientId,
-    clientSecret,
-    authorizeEndpoint: `${supabaseUrl}/auth/v1/oauth/authorize`,
-    tokenEndpoint: `${supabaseUrl}/auth/v1/oauth/token`,
-  };
 }
 
 function randomBase64Url(byteLength = 32) {
